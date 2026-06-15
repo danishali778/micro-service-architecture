@@ -1,0 +1,18 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: Ruff lint
+        entry: uv run ruff check
+        language: system
+        types: [python]
+      - id: ruff-format
+        name: Ruff format
+        entry: uv run ruff format --check
+        language: system
+        types: [python]
+      - id: mypy
+        name: mypy
+        entry: uv run mypy services/api-gateway/app services/api-gateway/scripts
+        language: system
+        pass_filenames: false

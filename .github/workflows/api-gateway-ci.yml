@@ -1,0 +1,39 @@
+name: API Gateway CI
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/api-gateway-ci.yml"
+      - ".python-version"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "services/api-gateway/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/api-gateway-ci.yml"
+      - ".python-version"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "services/api-gateway/**"
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.16"
+          enable-cache: true
+      - run: uv python install 3.13
+      - run: uv sync --all-packages --group dev --locked
+      - run: uv run ruff format --check .
+      - run: uv run ruff check .
+      - run: uv run mypy services/api-gateway/app services/api-gateway/scripts
+      - run: uv run pytest
+      - run: uv run python services/api-gateway/scripts/validate_openapi.py
+      - run: docker build -f services/api-gateway/Dockerfile .
