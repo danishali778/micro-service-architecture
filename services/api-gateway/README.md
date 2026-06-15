@@ -40,4 +40,3 @@ uv run pytest
 uv run python services/api-gateway/scripts/validate_openapi.py
 docker build -f services/api-gateway/Dockerfile .
 ```
-

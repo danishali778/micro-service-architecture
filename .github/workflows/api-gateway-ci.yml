@@ -37,4 +37,3 @@ jobs:
       - run: uv run pytest
       - run: uv run python services/api-gateway/scripts/validate_openapi.py
       - run: docker build -f services/api-gateway/Dockerfile .
-

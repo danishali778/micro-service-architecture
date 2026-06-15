@@ -16,4 +16,3 @@ repos:
         entry: uv run mypy services/api-gateway/app services/api-gateway/scripts
         language: system
         pass_filenames: false
-

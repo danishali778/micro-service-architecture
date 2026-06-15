@@ -182,4 +182,3 @@ components:
       properties:
         error:
           $ref: "#/components/schemas/Error"
-
