@@ -17,6 +17,9 @@ class OidcTokenValidator:
         self._http_client = http_client
         self._keys: dict[str, dict[str, Any]] = {}
         self._expires_at = 0.0
+        self._next_refresh_allowed_at = 0.0
+        self._next_forced_refresh_allowed_at = 0.0
+        self._unknown_key_ids: dict[str, float] = {}
         self._refresh_lock = asyncio.Lock()
 
     @property
@@ -26,21 +29,35 @@ class OidcTokenValidator:
     async def initialize(self) -> None:
         await self._refresh()
 
+    async def ensure_ready(self) -> bool:
+        if self.is_ready:
+            return True
+        try:
+            await self._refresh()
+        except (httpx.HTTPError, ValueError, KeyError):
+            return False
+        return self.is_ready
+
     async def validate(self, token: str) -> Principal:
-        if not self.is_ready:
-            try:
-                await self._refresh()
-            except (httpx.HTTPError, ValueError, KeyError) as error:
-                raise ServiceUnavailableError("Authentication metadata is unavailable.") from error
+        if not await self.ensure_ready():
+            raise ServiceUnavailableError("Authentication metadata is unavailable.")
 
         try:
             header = jwt.get_unverified_header(token)
             if header.get("alg") != "RS256":
                 raise UnauthorizedError()
             key_id = header.get("kid")
+            if not isinstance(key_id, str):
+                raise UnauthorizedError()
+            if key_id not in self._keys and not self._is_unknown_key_cached(key_id):
+                try:
+                    await self._refresh(force=True)
+                except (httpx.HTTPError, ValueError, KeyError):
+                    pass
             if not isinstance(key_id, str) or key_id not in self._keys:
-                await self._refresh(force=True)
-            if not isinstance(key_id, str) or key_id not in self._keys:
+                self._unknown_key_ids[key_id] = (
+                    time.monotonic() + self._settings.oidc_refresh_cooldown_seconds
+                )
                 raise UnauthorizedError()
 
             signing_key = jwt.PyJWK.from_dict(self._keys[key_id], algorithm="RS256").key
@@ -79,6 +96,17 @@ class OidcTokenValidator:
         async with self._refresh_lock:
             if self.is_ready and not force:
                 return
+            now = time.monotonic()
+            if force:
+                if now < self._next_forced_refresh_allowed_at:
+                    return
+                self._next_forced_refresh_allowed_at = (
+                    now + self._settings.oidc_refresh_cooldown_seconds
+                )
+            else:
+                if now < self._next_refresh_allowed_at:
+                    return
+                self._next_refresh_allowed_at = now + self._settings.oidc_refresh_cooldown_seconds
 
             discovery_response = await self._http_client.get(str(self._settings.oidc_discovery_url))
             discovery_response.raise_for_status()
@@ -109,6 +137,14 @@ class OidcTokenValidator:
 
             self._keys = parsed_keys
             self._expires_at = time.monotonic() + self._settings.oidc_jwks_cache_ttl_seconds
+            self._unknown_key_ids.clear()
+
+    def _is_unknown_key_cached(self, key_id: str) -> bool:
+        expires_at = self._unknown_key_ids.get(key_id, 0.0)
+        if time.monotonic() < expires_at:
+            return True
+        self._unknown_key_ids.pop(key_id, None)
+        return False
 
     def _validate_jwks_uri(self, jwks_uri: str) -> None:
         parsed = urlparse(jwks_uri)

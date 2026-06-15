@@ -32,6 +32,8 @@ def make_test_settings(**overrides: object) -> Settings:
 @dataclass
 class FakeTokenValidator:
     ready: bool = True
+    recover_on_ensure: bool = False
+    ensure_ready_calls: int = 0
     principal: Principal = field(
         default_factory=lambda: Principal(
             subject_id="user-1",
@@ -46,6 +48,12 @@ class FakeTokenValidator:
 
     async def initialize(self) -> None:
         return None
+
+    async def ensure_ready(self) -> bool:
+        self.ensure_ready_calls += 1
+        if self.recover_on_ensure:
+            self.ready = True
+        return self.ready
 
     async def validate(self, token: str) -> Principal:
         if token != "valid-token":

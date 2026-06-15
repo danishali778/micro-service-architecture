@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     oidc_jwks_cache_ttl_seconds: int = Field(
         default=300, ge=30, le=86_400, validation_alias="OIDC_JWKS_CACHE_TTL_SECONDS"
     )
+    oidc_refresh_cooldown_seconds: int = Field(
+        default=30, ge=1, le=300, validation_alias="OIDC_REFRESH_COOLDOWN_SECONDS"
+    )
 
     scenario_service_url: AnyHttpUrl = Field(
         default_factory=lambda: AnyHttpUrl("http://127.0.0.1:9100"),

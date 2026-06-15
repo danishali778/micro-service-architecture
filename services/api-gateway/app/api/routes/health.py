@@ -21,6 +21,6 @@ async def liveness() -> HealthResponse:
     responses={503: {"model": ErrorResponse}},
 )
 async def readiness(services: Annotated[Services, Depends(get_services)]) -> HealthResponse:
-    if not services.token_validator.is_ready:
+    if not await services.token_validator.ensure_ready():
         raise ServiceUnavailableError("Authentication metadata is not ready.")
     return HealthResponse()

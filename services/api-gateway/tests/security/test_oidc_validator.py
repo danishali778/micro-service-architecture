@@ -167,6 +167,53 @@ async def test_refreshes_jwks_when_token_uses_unknown_key_id() -> None:
 
 
 @pytest.mark.anyio
+async def test_rate_limits_forced_refreshes_for_unknown_key_ids() -> None:
+    trusted_key = rsa.generate_private_key(public_exponent=65_537, key_size=2048)
+    unknown_key = rsa.generate_private_key(public_exponent=65_537, key_size=2048)
+    jwks_requests = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal jwks_requests
+        if request.url.path == "/.well-known/openid-configuration":
+            return httpx.Response(200, json={"issuer": ISSUER, "jwks_uri": f"{ISSUER}/jwks"})
+        jwks_requests += 1
+        return httpx.Response(200, json={"keys": [public_jwk(trusted_key)]})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        validator = OidcTokenValidator(settings=make_test_settings(), http_client=http_client)
+        await validator.initialize()
+
+        for key_id in ("unknown-1", "unknown-2", "unknown-3"):
+            with pytest.raises(UnauthorizedError):
+                await validator.validate(token(unknown_key, key_id=key_id))
+
+    assert jwks_requests == 2
+
+
+@pytest.mark.anyio
+async def test_ensure_ready_refreshes_expired_metadata() -> None:
+    key = rsa.generate_private_key(public_exponent=65_537, key_size=2048)
+    discovery_requests = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal discovery_requests
+        if request.url.path == "/.well-known/openid-configuration":
+            discovery_requests += 1
+            return httpx.Response(200, json={"issuer": ISSUER, "jwks_uri": f"{ISSUER}/jwks"})
+        return httpx.Response(200, json={"keys": [public_jwk(key)]})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        validator = OidcTokenValidator(settings=make_test_settings(), http_client=http_client)
+        await validator.initialize()
+        validator._expires_at = 0.0
+        validator._next_refresh_allowed_at = 0.0
+
+        assert await validator.ensure_ready()
+
+    assert discovery_requests == 2
+
+
+@pytest.mark.anyio
 async def test_rejects_discovery_issuer_mismatch() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(

@@ -6,6 +6,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.api.error_handling import unexpected_error_response
 from app.domain.value_objects.correlation_id import CorrelationId
 
 logger = structlog.get_logger()
@@ -23,7 +24,10 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         structlog.contextvars.bind_contextvars(correlation_id=correlation_id)
         started_at = time.perf_counter()
 
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception as error:
+            response = await unexpected_error_response(request, error)
         response.headers["X-Correlation-ID"] = correlation_id
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"

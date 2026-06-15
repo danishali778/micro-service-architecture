@@ -35,6 +35,20 @@ def _response(
     )
 
 
+async def unexpected_error_response(request: Request, error: Exception) -> JSONResponse:
+    await logger.aexception(
+        "unhandled_request_error",
+        correlation_id=_correlation_id(request),
+        error_type=type(error).__name__,
+    )
+    return _response(
+        request=request,
+        status_code=500,
+        code="internal_error",
+        message="An unexpected error occurred.",
+    )
+
+
 def install_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(GatewayError)
     async def gateway_error_handler(request: Request, error: GatewayError) -> JSONResponse:
@@ -64,14 +78,4 @@ def install_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def unexpected_error_handler(request: Request, error: Exception) -> JSONResponse:
-        await logger.aexception(
-            "unhandled_request_error",
-            correlation_id=_correlation_id(request),
-            error_type=type(error).__name__,
-        )
-        return _response(
-            request=request,
-            status_code=500,
-            code="internal_error",
-            message="An unexpected error occurred.",
-        )
+        return await unexpected_error_response(request, error)

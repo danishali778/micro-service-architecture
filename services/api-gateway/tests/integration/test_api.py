@@ -25,6 +25,18 @@ def test_readiness_succeeds_after_security_initialization(client: TestClient) ->
     assert response.json() == {"status": "ok"}
 
 
+def test_readiness_attempts_recovery(
+    client: TestClient, token_validator: FakeTokenValidator
+) -> None:
+    token_validator.ready = False
+    token_validator.recover_on_ensure = True
+
+    response = client.get("/health/ready")
+
+    assert response.status_code == 200
+    assert token_validator.ensure_ready_calls == 1
+
+
 def test_default_documentation_routes_are_not_public(client: TestClient) -> None:
     assert client.get("/docs").status_code == 404
     assert client.get("/openapi.json").status_code == 404
@@ -114,9 +126,19 @@ def test_unhandled_error_is_sanitized(
     )
 
     with TestClient(app, raise_server_exceptions=False) as test_client:
-        response = test_client.get("/api/v1/scenarios", headers=AUTH)
+        response = test_client.get(
+            "/api/v1/scenarios",
+            headers={
+                **AUTH,
+                "Origin": "http://localhost:3000",
+                "X-Correlation-ID": "unexpected-error-correlation",
+            },
+        )
 
     assert response.status_code == 500
     assert response.json()["error"]["code"] == "internal_error"
+    assert response.headers["X-Correlation-ID"] == "unexpected-error-correlation"
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["Access-Control-Allow-Origin"] == "http://localhost:3000"
     assert "secret.internal.example" not in response.text
     assert "authorization" not in response.text.lower()

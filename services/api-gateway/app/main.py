@@ -81,6 +81,7 @@ def create_app(
         redoc_url=None,
         openapi_url=None,
     )
+    application.add_middleware(RequestContextMiddleware)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=resolved_settings.cors_allowed_origins,
@@ -88,7 +89,6 @@ def create_app(
         allow_methods=["GET"],
         allow_headers=["Authorization", "X-Correlation-ID"],
     )
-    application.add_middleware(RequestContextMiddleware)
     install_exception_handlers(application)
     application.include_router(health.router)
     application.include_router(scenarios.router, prefix=resolved_settings.public_api_prefix)
