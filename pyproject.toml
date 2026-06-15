@@ -1,0 +1,46 @@
+[project]
+name = "cyber-range-platform"
+version = "0.1.0"
+requires-python = ">=3.13,<3.14"
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "mypy>=1.15",
+  "openapi-spec-validator>=0.7.2",
+  "pre-commit>=4.2",
+  "pyyaml>=6.0",
+  "pytest>=8.3",
+  "pytest-cov>=6.1",
+  "respx>=0.22",
+  "ruff>=0.11",
+  "types-pyyaml>=6.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["services/*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC", "S", "RUF"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"services/api-gateway/tests/**" = ["S105", "S106"]
+"services/api-gateway/scripts/**" = ["S104"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+warn_unused_ignores = true
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+addopts = "--strict-config --strict-markers --cov=app --cov-report=term-missing --cov-fail-under=85"
+testpaths = ["services/api-gateway/tests"]
