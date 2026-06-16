@@ -33,7 +33,14 @@ def main() -> None:
         repository.create_role(
             role_code="security_learner",
             display_name="Security Learner",
-            scopes=frozenset({"scenarios:read", "matches:read"}),
+            scopes=frozenset(
+                {
+                    "scenarios:read",
+                    "matches:create",
+                    "matches:read",
+                    "matches:cancel",
+                }
+            ),
         )
         _try(
             lambda: repository.create_tenant(
