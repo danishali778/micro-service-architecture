@@ -34,6 +34,9 @@ ignore = ["S101"]
 [tool.ruff.lint.per-file-ignores]
 "services/api-gateway/tests/**" = ["S105", "S106"]
 "services/api-gateway/scripts/**" = ["S104"]
+"services/scenario-service/tests/conftest.py" = ["E402"]
+"services/scenario-service/tests/**" = ["S105", "S106"]
+"services/scenario-service/scripts/**" = ["S104"]
 
 [tool.mypy]
 python_version = "3.13"
