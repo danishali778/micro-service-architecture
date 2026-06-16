@@ -1,12 +1,10 @@
 openapi: 3.1.0
 info:
-  title: Cyber Range API Gateway
+  title: Cyber Range Scenario Service
   version: 0.1.0
-  description: Implemented milestone-one public HTTP contract.
+  description: Implemented milestone-one internal scenario catalog contract.
 servers:
   - url: /
-security:
-  - oidc: []
 paths:
   /health/live:
     get:
@@ -32,17 +30,15 @@ paths:
                 $ref: "#/components/schemas/Health"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
-  /api/v1/scenarios:
+  /internal/v1/scenarios:
     get:
       operationId: listScenarios
-      security:
-        - oidc: [scenarios:read]
       parameters:
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
       responses:
         "200":
-          description: Tenant-visible scenario page
+          description: Tenant-visible published scenario page
           headers:
             X-Correlation-ID:
               $ref: "#/components/headers/CorrelationId"
@@ -56,17 +52,9 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "422":
           $ref: "#/components/responses/ValidationError"
-        "502":
-          $ref: "#/components/responses/BadGateway"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
-        "504":
-          $ref: "#/components/responses/GatewayTimeout"
 components:
-  securitySchemes:
-    oidc:
-      type: openIdConnect
-      openIdConnectUrl: http://127.0.0.1:9000/.well-known/openid-configuration
   headers:
     CorrelationId:
       description: Request correlation identifier
@@ -88,7 +76,7 @@ components:
         type: string
   responses:
     Unauthorized:
-      description: Missing or invalid authentication
+      description: Missing or invalid internal authentication
       content:
         application/json:
           schema:
@@ -105,20 +93,8 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
-    BadGateway:
-      description: Invalid downstream response
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/ErrorResponse"
     ServiceUnavailable:
       description: Required dependency is unavailable
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/ErrorResponse"
-    GatewayTimeout:
-      description: Required dependency timed out
       content:
         application/json:
           schema:

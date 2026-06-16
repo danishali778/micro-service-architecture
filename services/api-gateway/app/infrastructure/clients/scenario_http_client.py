@@ -10,10 +10,15 @@ from app.domain.value_objects.tenant_context import TrustedRequestContext
 class _ScenarioResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    scenario_id: str
-    name: str
-    version: int = Field(ge=1)
-    description: str | None = None
+    id: str
+    latest_version: str
+    title: str
+    summary: str
+    difficulty: str
+    category: str
+    tags: list[str]
+    estimated_duration_minutes: int = Field(ge=1)
+    status: str
 
 
 class _ScenarioPageResponse(BaseModel):
@@ -26,10 +31,15 @@ class _ScenarioPageResponse(BaseModel):
         return ScenarioPage(
             items=tuple(
                 Scenario(
-                    scenario_id=item.scenario_id,
-                    name=item.name,
-                    version=item.version,
-                    description=item.description,
+                    id=item.id,
+                    latest_version=item.latest_version,
+                    title=item.title,
+                    summary=item.summary,
+                    difficulty=item.difficulty,
+                    category=item.category,
+                    tags=tuple(item.tags),
+                    estimated_duration_minutes=item.estimated_duration_minutes,
+                    status=item.status,
                 )
                 for item in self.items
             ),
@@ -62,7 +72,7 @@ class ScenarioHttpClient:
 
         try:
             response = await self._http_client.get(
-                f"{self._base_url}/internal/scenarios",
+                f"{self._base_url}/internal/v1/scenarios",
                 params=params,
                 headers=self._authenticator.headers(context),
             )

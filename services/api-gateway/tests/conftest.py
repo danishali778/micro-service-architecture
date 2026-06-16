@@ -79,10 +79,15 @@ class FakeScenarioClient(ScenarioClient):
         return ScenarioPage(
             items=(
                 Scenario(
-                    scenario_id="scenario-1",
-                    name="Scenario One",
-                    description="A safe scenario.",
-                    version=1,
+                    id="scn_sql_injection_login",
+                    latest_version="1.0.0",
+                    title="SQL Injection Login Bypass",
+                    summary="Find and exploit an injectable login form.",
+                    difficulty="beginner",
+                    category="web-security",
+                    tags=("sql-injection", "authentication"),
+                    estimated_duration_minutes=30,
+                    status="published",
                 ),
             ),
             next_cursor=cursor,

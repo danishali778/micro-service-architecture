@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True, slots=True)
-class Scenario:
+class ScenarioCatalogItem:
     id: str
     latest_version: str
     title: str
@@ -16,5 +16,5 @@ class Scenario:
 
 @dataclass(frozen=True, slots=True)
 class ScenarioPage:
-    items: tuple[Scenario, ...]
+    items: tuple[ScenarioCatalogItem, ...]
     next_cursor: str | None

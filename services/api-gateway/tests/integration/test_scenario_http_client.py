@@ -18,6 +18,7 @@ CONTEXT = TrustedRequestContext(
 @pytest.mark.anyio
 async def test_scenario_client_validates_response_and_propagates_context() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/internal/v1/scenarios"
         assert request.headers["X-Internal-Tenant-ID"] == "tenant-1"
         assert request.headers["X-Correlation-ID"] == "correlation-1"
         assert request.url.params["limit"] == "25"
@@ -25,7 +26,19 @@ async def test_scenario_client_validates_response_and_propagates_context() -> No
         return httpx.Response(
             200,
             json={
-                "items": [{"scenario_id": "scenario-1", "name": "One", "version": 1}],
+                "items": [
+                    {
+                        "id": "scn_sql_injection_login",
+                        "latest_version": "1.0.0",
+                        "title": "SQL Injection Login Bypass",
+                        "summary": "Find and exploit an injectable login form.",
+                        "difficulty": "beginner",
+                        "category": "web-security",
+                        "tags": ["sql-injection", "authentication"],
+                        "estimated_duration_minutes": 30,
+                        "status": "published",
+                    }
+                ],
                 "next_cursor": None,
             },
         )
@@ -38,7 +51,8 @@ async def test_scenario_client_validates_response_and_propagates_context() -> No
         )
         page = await client.list_scenarios(limit=25, cursor="opaque", context=CONTEXT)
 
-    assert page.items[0].scenario_id == "scenario-1"
+    assert page.items[0].id == "scn_sql_injection_login"
+    assert page.items[0].tags == ("sql-injection", "authentication")
 
 
 @pytest.mark.anyio
