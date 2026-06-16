@@ -54,6 +54,35 @@ paths:
           $ref: "#/components/responses/ValidationError"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+  /internal/v1/scenario-snapshots:
+    post:
+      operationId: buildScenarioSnapshot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScenarioSnapshotRequest"
+      responses:
+        "200":
+          description: Immutable scenario snapshot for match creation
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScenarioSnapshot"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
 components:
   headers:
     CorrelationId:
@@ -83,6 +112,12 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
     Forbidden:
       description: Caller lacks permission
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource was not found
       content:
         application/json:
           schema:
@@ -155,6 +190,52 @@ components:
             $ref: "#/components/schemas/Scenario"
         next_cursor:
           type: [string, "null"]
+    ScenarioSnapshotRequest:
+      type: object
+      additionalProperties: false
+      required: [scenario_id]
+      properties:
+        scenario_id:
+          type: string
+        version:
+          type: [string, "null"]
+    ScenarioSnapshot:
+      type: object
+      additionalProperties: false
+      required:
+        - snapshot_id
+        - scenario_id
+        - version
+        - title
+        - target_profile
+        - runtime_template
+        - action_policy
+        - resource_budget
+        - verification_contract
+      properties:
+        snapshot_id:
+          type: string
+        scenario_id:
+          type: string
+        version:
+          type: string
+        title:
+          type: string
+        target_profile:
+          type: object
+          additionalProperties: true
+        runtime_template:
+          type: object
+          additionalProperties: true
+        action_policy:
+          type: object
+          additionalProperties: true
+        resource_budget:
+          type: object
+          additionalProperties: true
+        verification_contract:
+          type: object
+          additionalProperties: true
     ErrorDetail:
       type: object
       additionalProperties: true

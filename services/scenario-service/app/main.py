@@ -7,6 +7,7 @@ from app.api.error_handling import install_exception_handlers
 from app.api.middleware.request_context import RequestContextMiddleware
 from app.api.routes import health, scenarios
 from app.application.ports.scenario_repository import ScenarioRepository
+from app.application.queries.build_scenario_snapshot import BuildScenarioSnapshot
 from app.application.queries.list_scenarios import ListScenarios
 from app.core.config import Settings, get_settings
 from app.core.container import Services
@@ -53,6 +54,7 @@ def create_app(
 
         application.state.services = Services(
             list_scenarios=ListScenarios(resolved_repository),
+            build_scenario_snapshot=BuildScenarioSnapshot(resolved_repository),
             readiness_checker=resolved_readiness_checker,
             internal_auth_validator=resolved_auth_validator,
         )

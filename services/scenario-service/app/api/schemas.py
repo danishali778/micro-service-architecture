@@ -26,6 +26,27 @@ class ScenarioPageResponse(BaseModel):
     next_cursor: str | None
 
 
+class ScenarioSnapshotRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    scenario_id: str = Field(min_length=1, max_length=80)
+    version: str | None = Field(default=None, min_length=1, max_length=32)
+
+
+class ScenarioSnapshotResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    snapshot_id: str
+    scenario_id: str
+    version: str
+    title: str
+    target_profile: dict[str, Any]
+    runtime_template: dict[str, Any]
+    action_policy: dict[str, Any]
+    resource_budget: dict[str, Any]
+    verification_contract: dict[str, Any]
+
+
 class ErrorBody(BaseModel):
     code: str
     message: str

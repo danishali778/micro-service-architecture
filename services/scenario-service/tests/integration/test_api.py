@@ -60,6 +60,36 @@ def test_rejects_invalid_cursor(client: TestClient) -> None:
     assert response.json()["error"]["code"] == "validation_error"
 
 
+def test_builds_scenario_snapshot_for_orchestrator(client: TestClient) -> None:
+    response = client.post(
+        "/internal/v1/scenario-snapshots",
+        json={"scenario_id": "scn_sql_injection_login", "version": "1.0.0"},
+        headers=auth_headers(
+            workload_id="match-orchestrator-service",
+            scopes="matches:create",
+            tenant_id="tenant-abc",
+        ),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["snapshot_id"] == "ssnap_sql_login_1_0_0"
+    assert body["scenario_id"] == "scn_sql_injection_login"
+    assert body["target_profile"]["runtime"] == "container"
+    assert response.headers["X-Correlation-ID"] == "correlation-1"
+
+
+def test_snapshot_returns_not_found_for_unavailable_scenario(client: TestClient) -> None:
+    response = client.post(
+        "/internal/v1/scenario-snapshots",
+        json={"scenario_id": "missing"},
+        headers=auth_headers(workload_id="match-orchestrator-service", scopes="matches:create"),
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "scenario_not_found"
+
+
 def test_unexpected_errors_do_not_leak_internal_details(
     scenario_repository: FakeScenarioRepository,
 ) -> None:

@@ -57,3 +57,10 @@ def require_gateway_scenario_read(context: TrustedInternalContext) -> None:
         raise ForbiddenError()
     if "scenarios:read" not in context.scopes:
         raise ForbiddenError()
+
+
+def require_orchestrator_match_create(context: TrustedInternalContext) -> None:
+    if context.workload_id != "match-orchestrator-service":
+        raise ForbiddenError()
+    if "matches:create" not in context.scopes:
+        raise ForbiddenError()

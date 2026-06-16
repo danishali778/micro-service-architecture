@@ -11,7 +11,7 @@ SERVICE_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SERVICE_ROOT))
 
 from app.core.config import Settings
-from app.domain.entities.scenario import ScenarioCatalogItem, ScenarioPage
+from app.domain.entities.scenario import ScenarioCatalogItem, ScenarioPage, ScenarioSnapshot
 from app.infrastructure.database.health import StaticReadinessChecker
 from app.main import create_app
 from fastapi.testclient import TestClient
@@ -80,6 +80,29 @@ class FakeScenarioRepository:
         if self.error is not None:
             raise self.error
         return self.page
+
+    def build_snapshot(
+        self,
+        *,
+        tenant_id: str,
+        scenario_id: str,
+        version: str | None,
+    ) -> ScenarioSnapshot | None:
+        if self.error is not None:
+            raise self.error
+        if scenario_id != "scn_sql_injection_login":
+            return None
+        return ScenarioSnapshot(
+            snapshot_id="ssnap_sql_login_1_0_0",
+            scenario_id=scenario_id,
+            version=version or "1.0.0",
+            title="SQL Injection Login Bypass",
+            target_profile={"runtime": "container", "template_ref": "local/sql-login"},
+            runtime_template={"kind": "compose", "ref": "local/sql-login/docker-compose.yml"},
+            action_policy={"network": "sandbox-only", "filesystem": "workspace-only"},
+            resource_budget={"cpu_limit": "1", "memory_mb": 512, "timeout_seconds": 1800},
+            verification_contract={"ref": "verify/sql-login/1.0.0"},
+        )
 
 
 @pytest.fixture

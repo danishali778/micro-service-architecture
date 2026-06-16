@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from app.domain.entities.scenario import ScenarioPage
+from app.domain.entities.scenario import ScenarioPage, ScenarioSnapshot
 
 
 class ScenarioRepository(Protocol):
@@ -11,3 +11,11 @@ class ScenarioRepository(Protocol):
         limit: int,
         offset: int,
     ) -> ScenarioPage: ...
+
+    def build_snapshot(
+        self,
+        *,
+        tenant_id: str,
+        scenario_id: str,
+        version: str | None,
+    ) -> ScenarioSnapshot | None: ...
