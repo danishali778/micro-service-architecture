@@ -16,12 +16,16 @@ def get_services(request: Request) -> Services:
 
 
 async def get_principal(
+    request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
     services: Annotated[Services, Depends(get_services)],
 ) -> Principal:
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise UnauthorizedError()
-    return await services.token_validator.validate(credentials.credentials)
+    return await services.token_validator.validate(
+        credentials.credentials,
+        correlation_id=request.state.correlation_id,
+    )
 
 
 async def require_scenarios_read(

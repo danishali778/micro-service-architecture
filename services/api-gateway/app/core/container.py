@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from app.application.ports.identity_client import IdentityClient
 from app.application.queries.list_scenarios import ListScenarios
 from app.security.token_validator import TokenValidator
 
@@ -7,4 +8,5 @@ from app.security.token_validator import TokenValidator
 @dataclass(frozen=True, slots=True)
 class Services:
     token_validator: TokenValidator
+    identity_client: IdentityClient
     list_scenarios: ListScenarios

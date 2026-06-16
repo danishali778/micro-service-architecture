@@ -23,6 +23,15 @@ class UnauthorizedError(GatewayError):
         super().__init__(status_code=401, code="unauthorized", message=message)
 
 
+class InvalidCredentialsError(GatewayError):
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=401,
+            code="invalid_credentials",
+            message="Authentication failed.",
+        )
+
+
 class ForbiddenError(GatewayError):
     def __init__(self, message: str = "The caller lacks permission for this operation.") -> None:
         super().__init__(status_code=403, code="forbidden", message=message)
