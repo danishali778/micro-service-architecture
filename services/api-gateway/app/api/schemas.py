@@ -10,10 +10,15 @@ class HealthResponse(BaseModel):
 class ScenarioResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    scenario_id: str
-    name: str
-    version: int = Field(ge=1)
-    description: str | None = None
+    id: str
+    latest_version: str
+    title: str
+    summary: str
+    difficulty: str
+    category: str
+    tags: list[str]
+    estimated_duration_minutes: int = Field(ge=1)
+    status: str
 
 
 class ScenarioPageResponse(BaseModel):

@@ -135,17 +135,39 @@ components:
     Scenario:
       type: object
       additionalProperties: false
-      required: [scenario_id, name, version]
+      required:
+        - id
+        - latest_version
+        - title
+        - summary
+        - difficulty
+        - category
+        - tags
+        - estimated_duration_minutes
+        - status
       properties:
-        scenario_id:
+        id:
           type: string
-        name:
+        latest_version:
           type: string
-        description:
-          type: [string, "null"]
-        version:
+        title:
+          type: string
+        summary:
+          type: string
+        difficulty:
+          type: string
+        category:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        estimated_duration_minutes:
           type: integer
           minimum: 1
+        status:
+          type: string
+          enum: [published]
     ScenarioPage:
       type: object
       additionalProperties: false

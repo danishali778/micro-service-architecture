@@ -75,7 +75,8 @@ def test_lists_scenarios_and_propagates_context(
     assert response.status_code == 200
     assert response.headers["X-Correlation-ID"] == "client-correlation"
     assert response.json()["next_cursor"] == "opaque-cursor"
-    assert response.json()["items"][0]["scenario_id"] == "scenario-1"
+    assert response.json()["items"][0]["id"] == "scn_sql_injection_login"
+    assert response.json()["items"][0]["latest_version"] == "1.0.0"
     limit, cursor, context = scenario_client.calls[0]
     assert (limit, cursor) == (25, "opaque-cursor")
     assert context.correlation_id == "client-correlation"
