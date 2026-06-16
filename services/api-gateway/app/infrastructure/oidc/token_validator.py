@@ -1,20 +1,27 @@
 import asyncio
 import time
 from typing import Any, cast
-from urllib.parse import urlparse
 
 import httpx
 import jwt
 
+from app.application.ports.identity_client import IdentityClient
 from app.core.config import Settings
 from app.core.exceptions import ServiceUnavailableError, UnauthorizedError
 from app.domain.value_objects.tenant_context import Principal
 
 
-class OidcTokenValidator:
-    def __init__(self, *, settings: Settings, http_client: httpx.AsyncClient) -> None:
+class SupabaseJwtTokenValidator:
+    def __init__(
+        self,
+        *,
+        settings: Settings,
+        http_client: httpx.AsyncClient,
+        identity_client: IdentityClient,
+    ) -> None:
         self._settings = settings
         self._http_client = http_client
+        self._identity_client = identity_client
         self._keys: dict[str, dict[str, Any]] = {}
         self._expires_at = 0.0
         self._next_refresh_allowed_at = 0.0
@@ -38,13 +45,17 @@ class OidcTokenValidator:
             return False
         return self.is_ready
 
-    async def validate(self, token: str) -> Principal:
+    async def validate(self, token: str, *, correlation_id: str) -> Principal:
         if not await self.ensure_ready():
             raise ServiceUnavailableError("Authentication metadata is unavailable.")
 
         try:
             header = jwt.get_unverified_header(token)
-            if header.get("alg") != "RS256":
+            algorithm = header.get("alg")
+            if (
+                not isinstance(algorithm, str)
+                or algorithm not in self._settings.allowed_jwt_algorithms
+            ):
                 raise UnauthorizedError()
             key_id = header.get("kid")
             if not isinstance(key_id, str):
@@ -60,14 +71,14 @@ class OidcTokenValidator:
                 )
                 raise UnauthorizedError()
 
-            signing_key = jwt.PyJWK.from_dict(self._keys[key_id], algorithm="RS256").key
+            signing_key = jwt.PyJWK.from_dict(self._keys[key_id], algorithm=algorithm).key
             claims: dict[str, Any] = jwt.decode(
                 token,
                 signing_key,
-                algorithms=["RS256"],
-                audience=self._settings.oidc_audience,
-                issuer=str(self._settings.oidc_issuer).rstrip("/"),
-                options={"require": ["exp", "sub", "tenant_id", "scope"]},
+                algorithms=list(self._settings.allowed_jwt_algorithms),
+                audience=self._settings.supabase_jwt_audience,
+                issuer=str(self._settings.supabase_jwt_issuer).rstrip("/"),
+                options={"require": ["exp", "iat", "sub", "session_id", "role"]},
             )
         except UnauthorizedError:
             raise
@@ -75,21 +86,19 @@ class OidcTokenValidator:
             raise UnauthorizedError() from error
 
         subject = claims.get("sub")
-        tenant_id = claims.get("tenant_id")
-        scope = claims.get("scope")
-        if (
-            not isinstance(subject, str)
-            or not subject
-            or not isinstance(tenant_id, str)
-            or not tenant_id
-            or not isinstance(scope, str)
-        ):
+        session_id = claims.get("session_id")
+        role = claims.get("role")
+        if not isinstance(subject, str) or not subject:
+            raise UnauthorizedError()
+        if not isinstance(session_id, str) or not session_id:
+            raise UnauthorizedError()
+        if role != "authenticated":
             raise UnauthorizedError()
 
-        return Principal(
+        return await self._identity_client.resolve_session_context(
             subject_id=subject,
-            tenant_id=tenant_id,
-            scopes=frozenset(scope.split()),
+            session_id=session_id,
+            correlation_id=correlation_id,
         )
 
     async def _refresh(self, *, force: bool = False) -> None:
@@ -108,20 +117,7 @@ class OidcTokenValidator:
                     return
                 self._next_refresh_allowed_at = now + self._settings.oidc_refresh_cooldown_seconds
 
-            discovery_response = await self._http_client.get(str(self._settings.oidc_discovery_url))
-            discovery_response.raise_for_status()
-            metadata = cast(dict[str, Any], discovery_response.json())
-
-            expected_issuer = str(self._settings.oidc_issuer).rstrip("/")
-            if metadata.get("issuer") != expected_issuer:
-                raise ValueError("OIDC discovery issuer does not match configured issuer")
-
-            jwks_uri = metadata.get("jwks_uri")
-            if not isinstance(jwks_uri, str):
-                raise ValueError("OIDC discovery metadata has no valid jwks_uri")
-            self._validate_jwks_uri(jwks_uri)
-
-            jwks_response = await self._http_client.get(jwks_uri)
+            jwks_response = await self._http_client.get(str(self._settings.supabase_jwks_url))
             jwks_response.raise_for_status()
             jwks = cast(dict[str, Any], jwks_response.json())
             keys = jwks.get("keys")
@@ -146,9 +142,5 @@ class OidcTokenValidator:
         self._unknown_key_ids.pop(key_id, None)
         return False
 
-    def _validate_jwks_uri(self, jwks_uri: str) -> None:
-        parsed = urlparse(jwks_uri)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            raise ValueError("OIDC jwks_uri must be an absolute HTTP URL")
-        if self._settings.environment not in {"local", "test"} and parsed.scheme != "https":
-            raise ValueError("OIDC jwks_uri must use HTTPS outside local and test")
+
+OidcTokenValidator = SupabaseJwtTokenValidator

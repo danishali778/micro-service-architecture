@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Cyber Range API Gateway
   version: 0.1.0
-  description: Implemented milestone-one public HTTP contract.
+  description: Implemented public HTTP contract.
 servers:
   - url: /
 security:
@@ -32,11 +32,107 @@ paths:
                 $ref: "#/components/schemas/Health"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/auth/login:
+    post:
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Supabase token response with platform context
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthTokenResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+  /api/v1/auth/refresh:
+    post:
+      operationId: refresh
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: Refreshed Supabase token response with platform context
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthTokenResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+  /api/v1/auth/logout:
+    post:
+      operationId: logout
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogoutRequest"
+      responses:
+        "204":
+          description: Session logged out
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+  /api/v1/auth/me:
+    get:
+      operationId: getMe
+      security:
+        - supabaseJwt: []
+      responses:
+        "200":
+          description: Current platform subject context
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
   /api/v1/scenarios:
     get:
       operationId: listScenarios
       security:
-        - oidc: [scenarios:read]
+        - supabaseJwt: [scenarios:read]
       parameters:
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
@@ -64,9 +160,9 @@ paths:
           $ref: "#/components/responses/GatewayTimeout"
 components:
   securitySchemes:
-    oidc:
+    supabaseJwt:
       type: openIdConnect
-      openIdConnectUrl: http://127.0.0.1:9000/.well-known/openid-configuration
+      openIdConnectUrl: http://127.0.0.1:9999/auth/v1/.well-known/openid-configuration
   headers:
     CorrelationId:
       description: Request correlation identifier
@@ -132,6 +228,66 @@ components:
         status:
           type: string
           enum: [ok]
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password, tenant_id]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+        tenant_id:
+          type: string
+    RefreshRequest:
+      type: object
+      additionalProperties: false
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+    LogoutRequest:
+      type: object
+      additionalProperties: false
+      required: [access_token]
+      properties:
+        access_token:
+          type: string
+    AuthTokenResponse:
+      type: object
+      additionalProperties: false
+      required: [access_token, refresh_token, token_type, expires_in, subject_id, tenant_id, scopes]
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: [string, "null"]
+        token_type:
+          type: string
+        expires_in:
+          type: integer
+          minimum: 0
+        subject_id:
+          type: string
+        tenant_id:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+    Me:
+      type: object
+      additionalProperties: false
+      required: [subject_id, tenant_id, scopes]
+      properties:
+        subject_id:
+          type: string
+        tenant_id:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
     Scenario:
       type: object
       additionalProperties: false

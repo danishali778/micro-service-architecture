@@ -37,6 +37,9 @@ ignore = ["S101"]
 "services/scenario-service/tests/conftest.py" = ["E402"]
 "services/scenario-service/tests/**" = ["S105", "S106"]
 "services/scenario-service/scripts/**" = ["S104"]
+"services/identity-service/tests/conftest.py" = ["E402"]
+"services/identity-service/tests/**" = ["S105", "S106"]
+"services/identity-service/scripts/**" = ["S104"]
 
 [tool.mypy]
 python_version = "3.13"

@@ -7,6 +7,36 @@ class HealthResponse(BaseModel):
     status: str = "ok"
 
 
+class LoginRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=1, max_length=4096)
+    tenant_id: str = Field(min_length=1, max_length=120)
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str = Field(min_length=1)
+
+
+class LogoutRequest(BaseModel):
+    access_token: str = Field(min_length=1)
+
+
+class AuthTokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str | None
+    token_type: str
+    expires_in: int = Field(ge=0)
+    subject_id: str
+    tenant_id: str
+    scopes: list[str]
+
+
+class MeResponse(BaseModel):
+    subject_id: str
+    tenant_id: str
+    scopes: list[str]
+
+
 class ScenarioResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

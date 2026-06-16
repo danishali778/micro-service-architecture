@@ -3,11 +3,11 @@ import httpx
 
 def main() -> None:
     response = httpx.post(
-        "http://127.0.0.1:9000/token",
+        "http://127.0.0.1:9999/auth/v1/token",
+        params={"grant_type": "password"},
         json={
-            "subject": "local-user",
-            "tenant_id": "local-tenant",
-            "scope": "scenarios:read",
+            "email": "learner@example.com",
+            "password": "password",
         },
         timeout=5,
     )

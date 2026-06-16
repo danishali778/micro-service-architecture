@@ -1,6 +1,6 @@
 from app.core.exceptions import BadGatewayError
 from app.domain.value_objects.tenant_context import Principal
-from conftest import FakeScenarioClient, FakeTokenValidator
+from conftest import FakeIdentityClient, FakeScenarioClient, FakeTokenValidator
 from fastapi.testclient import TestClient
 
 AUTH = {"Authorization": "Bearer valid-token"}
@@ -23,6 +23,68 @@ def test_readiness_succeeds_after_security_initialization(client: TestClient) ->
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_login_forwards_to_identity_service(
+    client: TestClient,
+    identity_client: FakeIdentityClient,
+) -> None:
+    response = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "learner@example.com",
+            "password": "secret-password",
+            "tenant_id": "tenant-1",
+        },
+        headers={"X-Correlation-ID": "login-correlation"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["access_token"] == "access-token"
+    assert response.json()["tenant_id"] == "tenant-1"
+    assert identity_client.login_calls == [
+        ("learner@example.com", "secret-password", "tenant-1", "login-correlation")
+    ]
+
+
+def test_refresh_forwards_to_identity_service(
+    client: TestClient,
+    identity_client: FakeIdentityClient,
+) -> None:
+    response = client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": "refresh-token"},
+        headers={"X-Correlation-ID": "refresh-correlation"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["access_token"] == "new-access-token"
+    assert identity_client.refresh_calls == [("refresh-token", "refresh-correlation")]
+
+
+def test_logout_forwards_to_identity_service(
+    client: TestClient,
+    identity_client: FakeIdentityClient,
+) -> None:
+    response = client.post(
+        "/api/v1/auth/logout",
+        json={"access_token": "access-token"},
+        headers={"X-Correlation-ID": "logout-correlation"},
+    )
+
+    assert response.status_code == 204
+    assert identity_client.logout_calls == [("access-token", "logout-correlation")]
+
+
+def test_me_returns_resolved_platform_context(client: TestClient) -> None:
+    response = client.get("/api/v1/auth/me", headers=AUTH)
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "subject_id": "user-1",
+        "tenant_id": "tenant-1",
+        "scopes": ["scenarios:read"],
+    }
 
 
 def test_readiness_attempts_recovery(

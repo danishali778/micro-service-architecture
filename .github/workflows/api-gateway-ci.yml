@@ -8,6 +8,7 @@ on:
       - "pyproject.toml"
       - "uv.lock"
       - "services/api-gateway/**"
+      - "services/identity-service/contracts/openapi/**"
       - "services/scenario-service/contracts/openapi/**"
   push:
     branches: [main]
@@ -17,6 +18,7 @@ on:
       - "pyproject.toml"
       - "uv.lock"
       - "services/api-gateway/**"
+      - "services/identity-service/contracts/openapi/**"
       - "services/scenario-service/contracts/openapi/**"
 
 permissions:

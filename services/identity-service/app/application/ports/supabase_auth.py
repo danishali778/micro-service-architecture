@@ -1,0 +1,13 @@
+from typing import Protocol
+
+from app.domain.entities.identity import AuthTokenSet
+
+
+class SupabaseAuthProvider(Protocol):
+    async def login_with_password(self, *, email: str, password: str) -> AuthTokenSet: ...
+
+    async def refresh_session(self, *, refresh_token: str) -> AuthTokenSet: ...
+
+    async def logout(self, *, access_token: str) -> None: ...
+
+    async def create_user(self, *, email: str, password: str) -> str: ...
