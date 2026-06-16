@@ -9,6 +9,7 @@ on:
       - "uv.lock"
       - "services/api-gateway/**"
       - "services/identity-service/contracts/openapi/**"
+      - "services/match-orchestrator-service/contracts/openapi/**"
       - "services/scenario-service/contracts/openapi/**"
   push:
     branches: [main]
@@ -19,6 +20,7 @@ on:
       - "uv.lock"
       - "services/api-gateway/**"
       - "services/identity-service/contracts/openapi/**"
+      - "services/match-orchestrator-service/contracts/openapi/**"
       - "services/scenario-service/contracts/openapi/**"
 
 permissions:

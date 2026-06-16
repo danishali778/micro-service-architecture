@@ -1,12 +1,15 @@
 from collections.abc import Iterator
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 import pytest
 from app.application.ports.identity_client import IdentityClient
+from app.application.ports.match_client import MatchClient
 from app.application.ports.scenario_client import ScenarioClient
 from app.core.config import Settings
 from app.core.exceptions import UnauthorizedError
 from app.domain.auth import AuthTokenResponse
+from app.domain.matches import Match, MatchScenario
 from app.domain.scenarios import Scenario, ScenarioPage
 from app.domain.value_objects.tenant_context import Principal, TrustedRequestContext
 from app.main import create_app
@@ -26,6 +29,7 @@ def make_test_settings(**overrides: object) -> Settings:
         "supabase_jwt_audience": "authenticated",
         "identity_service_url": "https://identity.test",
         "scenario_service_url": "https://scenario.test",
+        "match_orchestrator_service_url": "https://matches.test",
         "internal_auth_mode": "local_header",
     }
     values.update(overrides)
@@ -165,6 +169,77 @@ class FakeScenarioClient(ScenarioClient):
         )
 
 
+@dataclass
+class FakeMatchClient(MatchClient):
+    error: Exception | None = None
+    create_calls: list[tuple[str, str | None, str, TrustedRequestContext]] = field(
+        default_factory=list
+    )
+    get_calls: list[tuple[str, TrustedRequestContext]] = field(default_factory=list)
+    cancel_calls: list[tuple[str, str, str, TrustedRequestContext]] = field(default_factory=list)
+
+    async def create_match(
+        self,
+        *,
+        scenario_id: str,
+        scenario_version: str | None,
+        idempotency_key: str,
+        context: TrustedRequestContext,
+    ) -> Match:
+        self.create_calls.append((scenario_id, scenario_version, idempotency_key, context))
+        if self.error is not None:
+            raise self.error
+        return _match(scenario_id=scenario_id)
+
+    async def get_match(self, *, match_id: str, context: TrustedRequestContext) -> Match:
+        self.get_calls.append((match_id, context))
+        if self.error is not None:
+            raise self.error
+        return _match(match_id=match_id)
+
+    async def cancel_match(
+        self,
+        *,
+        match_id: str,
+        reason: str,
+        idempotency_key: str,
+        context: TrustedRequestContext,
+    ) -> Match:
+        self.cancel_calls.append((match_id, reason, idempotency_key, context))
+        if self.error is not None:
+            raise self.error
+        return _match(match_id=match_id, state="cancelled", status_reason=reason)
+
+
+def _match(
+    *,
+    match_id: str = "match_123",
+    scenario_id: str = "scn_sql_injection_login",
+    state: str = "waiting_for_sandbox",
+    status_reason: str = "scenario_snapshot_created",
+) -> Match:
+    now = datetime(2026, 6, 16, 11, 0, tzinfo=UTC)
+    return Match(
+        id=match_id,
+        tenant_id="tenant-1",
+        subject_id="user-1",
+        scenario=MatchScenario(
+            id=scenario_id,
+            version="1.0.0",
+            snapshot_id="ssnap_sql_login_1_0_0",
+            title="SQL Injection Login Bypass",
+        ),
+        state=state,
+        phase="setup",
+        status_reason=status_reason,
+        created_at=now,
+        updated_at=now,
+        cancelled_at=now if state == "cancelled" else None,
+        completed_at=None,
+        failed_at=None,
+    )
+
+
 @pytest.fixture
 def token_validator() -> FakeTokenValidator:
     return FakeTokenValidator()
@@ -181,16 +256,23 @@ def scenario_client() -> FakeScenarioClient:
 
 
 @pytest.fixture
+def match_client() -> FakeMatchClient:
+    return FakeMatchClient()
+
+
+@pytest.fixture
 def client(
     token_validator: FakeTokenValidator,
     identity_client: FakeIdentityClient,
     scenario_client: FakeScenarioClient,
+    match_client: FakeMatchClient,
 ) -> Iterator[TestClient]:
     app = create_app(
         settings=make_test_settings(),
         token_validator=token_validator,
         identity_client=identity_client,
         scenario_client=scenario_client,
+        match_client=match_client,
     )
     with TestClient(app) as test_client:
         yield test_client

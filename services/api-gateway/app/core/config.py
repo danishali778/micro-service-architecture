@@ -49,6 +49,10 @@ class Settings(BaseSettings):
         default_factory=lambda: AnyHttpUrl("http://127.0.0.1:9100"),
         validation_alias="SCENARIO_SERVICE_URL",
     )
+    match_orchestrator_service_url: AnyHttpUrl = Field(
+        default_factory=lambda: AnyHttpUrl("http://127.0.0.1:9300"),
+        validation_alias="MATCH_ORCHESTRATOR_SERVICE_URL",
+    )
     identity_service_url: AnyHttpUrl = Field(
         default_factory=lambda: AnyHttpUrl("http://127.0.0.1:9200"),
         validation_alias="IDENTITY_SERVICE_URL",
