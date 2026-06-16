@@ -37,6 +37,24 @@ class ForbiddenError(GatewayError):
         super().__init__(status_code=403, code="forbidden", message=message)
 
 
+class NotFoundError(GatewayError):
+    def __init__(
+        self,
+        message: str = "The requested resource was not found.",
+        *,
+        code: str = "not_found",
+    ) -> None:
+        super().__init__(status_code=404, code=code, message=message)
+
+
+class ConflictError(GatewayError):
+    def __init__(
+        self,
+        message: str = "The requested operation conflicts with current state.",
+    ) -> None:
+        super().__init__(status_code=409, code="conflict", message=message)
+
+
 class BadGatewayError(GatewayError):
     def __init__(self) -> None:
         super().__init__(

@@ -1,0 +1,67 @@
+name: Match Orchestrator Service CI
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/match-orchestrator-service-ci.yml"
+      - ".python-version"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "services/match-orchestrator-service/**"
+      - "services/api-gateway/contracts/openapi/**"
+      - "services/scenario-service/contracts/openapi/**"
+      - "docs/services/match-orchestrator-service/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/match-orchestrator-service-ci.yml"
+      - ".python-version"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "services/match-orchestrator-service/**"
+      - "services/api-gateway/contracts/openapi/**"
+      - "services/scenario-service/contracts/openapi/**"
+      - "docs/services/match-orchestrator-service/**"
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: match_orchestrator
+          POSTGRES_PASSWORD: match_orchestrator
+          POSTGRES_DB: match_orchestrator_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_TEST_URL: postgresql+psycopg://match_orchestrator:match_orchestrator@127.0.0.1:5432/match_orchestrator_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.16"
+          enable-cache: true
+      - run: uv python install 3.13
+      - run: uv sync --all-packages --group dev --locked
+      - run: uv run ruff format --check services/match-orchestrator-service
+      - run: uv run ruff check services/match-orchestrator-service
+      - run: uv run mypy --config-file services/match-orchestrator-service/pyproject.toml services/match-orchestrator-service/app services/match-orchestrator-service/scripts
+        env:
+          MYPYPATH: services/match-orchestrator-service
+      - run: uv run pytest
+        working-directory: services/match-orchestrator-service
+        env:
+          DATABASE_TEST_URL: postgresql+psycopg://match_orchestrator:match_orchestrator@127.0.0.1:5432/match_orchestrator_test
+          PYTHONPATH: .
+      - run: uv run python services/match-orchestrator-service/scripts/validate_openapi.py
+      - run: docker build -f services/match-orchestrator-service/Dockerfile .

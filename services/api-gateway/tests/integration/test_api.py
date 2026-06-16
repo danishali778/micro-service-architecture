@@ -1,6 +1,11 @@
-from app.core.exceptions import BadGatewayError
+from app.core.exceptions import (
+    BadGatewayError,
+    ConflictError,
+    NotFoundError,
+    ServiceUnavailableError,
+)
 from app.domain.value_objects.tenant_context import Principal
-from conftest import FakeIdentityClient, FakeScenarioClient, FakeTokenValidator
+from conftest import FakeIdentityClient, FakeMatchClient, FakeScenarioClient, FakeTokenValidator
 from fastapi.testclient import TestClient
 
 AUTH = {"Authorization": "Bearer valid-token"}
@@ -205,3 +210,142 @@ def test_unhandled_error_is_sanitized(
     assert response.headers["Access-Control-Allow-Origin"] == "http://localhost:3000"
     assert "secret.internal.example" not in response.text
     assert "authorization" not in response.text.lower()
+
+
+def test_create_match_forwards_to_orchestrator(
+    client: TestClient,
+    token_validator: FakeTokenValidator,
+    match_client: FakeMatchClient,
+) -> None:
+    token_validator.principal = Principal(
+        subject_id="user-1",
+        tenant_id="tenant-1",
+        scopes=frozenset({"matches:create"}),
+    )
+
+    response = client.post(
+        "/api/v1/matches",
+        json={"scenario_id": "scn_sql_injection_login", "scenario_version": "1.0.0"},
+        headers={**AUTH, "Idempotency-Key": "create-key", "X-Correlation-ID": "match-corr"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["state"] == "waiting_for_sandbox"
+    assert response.json()["scenario"]["snapshot_id"] == "ssnap_sql_login_1_0_0"
+    scenario_id, version, idempotency_key, context = match_client.create_calls[0]
+    assert (scenario_id, version, idempotency_key) == (
+        "scn_sql_injection_login",
+        "1.0.0",
+        "create-key",
+    )
+    assert context.correlation_id == "match-corr"
+
+
+def test_create_match_requires_scope(
+    client: TestClient,
+    token_validator: FakeTokenValidator,
+) -> None:
+    token_validator.principal = Principal(
+        subject_id="user-1",
+        tenant_id="tenant-1",
+        scopes=frozenset({"matches:read"}),
+    )
+
+    response = client.post(
+        "/api/v1/matches",
+        json={"scenario_id": "scn_sql_injection_login"},
+        headers={**AUTH, "Idempotency-Key": "create-key"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_create_match_requires_idempotency_key(
+    client: TestClient,
+    token_validator: FakeTokenValidator,
+) -> None:
+    token_validator.principal = Principal(
+        subject_id="user-1",
+        tenant_id="tenant-1",
+        scopes=frozenset({"matches:create"}),
+    )
+
+    response = client.post(
+        "/api/v1/matches",
+        json={"scenario_id": "scn_sql_injection_login"},
+        headers=AUTH,
+    )
+
+    assert response.status_code == 422
+
+
+def test_get_match_forwards_to_orchestrator(
+    client: TestClient,
+    token_validator: FakeTokenValidator,
+    match_client: FakeMatchClient,
+) -> None:
+    token_validator.principal = Principal(
+        subject_id="user-1",
+        tenant_id="tenant-1",
+        scopes=frozenset({"matches:read"}),
+    )
+
+    response = client.get("/api/v1/matches/match_123", headers=AUTH)
+
+    assert response.status_code == 200
+    assert response.json()["id"] == "match_123"
+    assert match_client.get_calls[0][0] == "match_123"
+
+
+def test_cancel_match_forwards_to_orchestrator(
+    client: TestClient,
+    token_validator: FakeTokenValidator,
+    match_client: FakeMatchClient,
+) -> None:
+    token_validator.principal = Principal(
+        subject_id="user-1",
+        tenant_id="tenant-1",
+        scopes=frozenset({"matches:cancel"}),
+    )
+
+    response = client.post(
+        "/api/v1/matches/match_123/cancel",
+        json={"reason": "user_requested"},
+        headers={**AUTH, "Idempotency-Key": "cancel-key"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["state"] == "cancelled"
+    assert match_client.cancel_calls[0][0:3] == (
+        "match_123",
+        "user_requested",
+        "cancel-key",
+    )
+
+
+def test_match_route_maps_not_found_conflict_and_unavailable(
+    client: TestClient,
+    token_validator: FakeTokenValidator,
+    match_client: FakeMatchClient,
+) -> None:
+    token_validator.principal = Principal(
+        subject_id="user-1",
+        tenant_id="tenant-1",
+        scopes=frozenset({"matches:read", "matches:create"}),
+    )
+
+    match_client.error = NotFoundError(code="match_not_found", message="The match was not found.")
+    not_found = client.get("/api/v1/matches/missing", headers=AUTH)
+    assert not_found.status_code == 404
+
+    match_client.error = ConflictError()
+    conflict = client.post(
+        "/api/v1/matches",
+        json={"scenario_id": "scn_sql_injection_login"},
+        headers={**AUTH, "Idempotency-Key": "conflict-key"},
+    )
+    assert conflict.status_code == 409
+
+    match_client.error = ServiceUnavailableError()
+    unavailable = client.get("/api/v1/matches/match_123", headers=AUTH)
+    assert unavailable.status_code == 503

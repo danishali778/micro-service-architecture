@@ -56,6 +56,41 @@ class ScenarioPageResponse(BaseModel):
     next_cursor: str | None
 
 
+class CreateMatchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    scenario_id: str = Field(min_length=1, max_length=80)
+    scenario_version: str | None = Field(default=None, min_length=1, max_length=32)
+
+
+class CancelMatchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(default="user_requested", min_length=1, max_length=200)
+
+
+class MatchScenarioResponse(BaseModel):
+    id: str
+    version: str
+    snapshot_id: str
+    title: str
+
+
+class MatchResponse(BaseModel):
+    id: str
+    tenant_id: str
+    subject_id: str
+    scenario: MatchScenarioResponse
+    state: str
+    phase: str
+    status_reason: str
+    created_at: str
+    updated_at: str
+    cancelled_at: str | None
+    completed_at: str | None
+    failed_at: str | None
+
+
 class ErrorBody(BaseModel):
     code: str
     message: str

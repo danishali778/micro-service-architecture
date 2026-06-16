@@ -28,6 +28,16 @@ class ForbiddenError(ScenarioServiceError):
         super().__init__(status_code=403, code="forbidden", message=message)
 
 
+class NotFoundError(ScenarioServiceError):
+    def __init__(
+        self,
+        message: str = "The requested resource was not found.",
+        *,
+        code: str = "not_found",
+    ) -> None:
+        super().__init__(status_code=404, code=code, message=message)
+
+
 class ValidationFailedError(ScenarioServiceError):
     def __init__(
         self,

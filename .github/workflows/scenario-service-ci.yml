@@ -8,6 +8,7 @@ on:
       - "pyproject.toml"
       - "uv.lock"
       - "services/scenario-service/**"
+      - "services/match-orchestrator-service/contracts/openapi/**"
       - "docs/services/scenario-service/**"
   push:
     branches: [main]
@@ -17,6 +18,7 @@ on:
       - "pyproject.toml"
       - "uv.lock"
       - "services/scenario-service/**"
+      - "services/match-orchestrator-service/contracts/openapi/**"
       - "docs/services/scenario-service/**"
 
 permissions:

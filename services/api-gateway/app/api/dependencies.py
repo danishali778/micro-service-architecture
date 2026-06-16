@@ -33,3 +33,24 @@ async def require_scenarios_read(
 ) -> Principal:
     require_scope(principal, "scenarios:read")
     return principal
+
+
+async def require_matches_create(
+    principal: Annotated[Principal, Depends(get_principal)],
+) -> Principal:
+    require_scope(principal, "matches:create")
+    return principal
+
+
+async def require_matches_read(
+    principal: Annotated[Principal, Depends(get_principal)],
+) -> Principal:
+    require_scope(principal, "matches:read")
+    return principal
+
+
+async def require_matches_cancel(
+    principal: Annotated[Principal, Depends(get_principal)],
+) -> Principal:
+    require_scope(principal, "matches:cancel")
+    return principal

@@ -158,6 +158,110 @@ paths:
           $ref: "#/components/responses/ServiceUnavailable"
         "504":
           $ref: "#/components/responses/GatewayTimeout"
+  /api/v1/matches:
+    post:
+      operationId: createMatch
+      security:
+        - supabaseJwt: [matches:create]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMatchRequest"
+      responses:
+        "200":
+          description: Match created or idempotently replayed
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Match"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+  /api/v1/matches/{match_id}:
+    get:
+      operationId: getMatch
+      security:
+        - supabaseJwt: [matches:read]
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+      responses:
+        "200":
+          description: Match status
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Match"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/matches/{match_id}/cancel:
+    post:
+      operationId: cancelMatch
+      security:
+        - supabaseJwt: [matches:cancel]
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelMatchRequest"
+      responses:
+        "200":
+          description: Match cancelled
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Match"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
 components:
   securitySchemes:
     supabaseJwt:
@@ -182,6 +286,20 @@ components:
       in: query
       schema:
         type: string
+    MatchId:
+      name: match_id
+      in: path
+      required: true
+      schema:
+        type: string
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
   responses:
     Unauthorized:
       description: Missing or invalid authentication
@@ -191,6 +309,18 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
     Forbidden:
       description: Caller lacks permission
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource was not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: Request conflicts with current state
       content:
         application/json:
           schema:
@@ -335,6 +465,81 @@ components:
             $ref: "#/components/schemas/Scenario"
         next_cursor:
           type: [string, "null"]
+    CreateMatchRequest:
+      type: object
+      additionalProperties: false
+      required: [scenario_id]
+      properties:
+        scenario_id:
+          type: string
+        scenario_version:
+          type: [string, "null"]
+    CancelMatchRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          default: user_requested
+    MatchScenario:
+      type: object
+      additionalProperties: false
+      required: [id, version, snapshot_id, title]
+      properties:
+        id:
+          type: string
+        version:
+          type: string
+        snapshot_id:
+          type: string
+        title:
+          type: string
+    Match:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - tenant_id
+        - subject_id
+        - scenario
+        - state
+        - phase
+        - status_reason
+        - created_at
+        - updated_at
+        - cancelled_at
+        - completed_at
+        - failed_at
+      properties:
+        id:
+          type: string
+        tenant_id:
+          type: string
+        subject_id:
+          type: string
+        scenario:
+          $ref: "#/components/schemas/MatchScenario"
+        state:
+          type: string
+        phase:
+          type: string
+        status_reason:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        cancelled_at:
+          type: [string, "null"]
+          format: date-time
+        completed_at:
+          type: [string, "null"]
+          format: date-time
+        failed_at:
+          type: [string, "null"]
+          format: date-time
     ErrorDetail:
       type: object
       additionalProperties: true

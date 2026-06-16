@@ -18,3 +18,4 @@ def test_openapi_documents_implemented_routes() -> None:
     assert "/health/live" in document["paths"]
     assert "/health/ready" in document["paths"]
     assert "/internal/v1/scenarios" in document["paths"]
+    assert "/internal/v1/scenario-snapshots" in document["paths"]
