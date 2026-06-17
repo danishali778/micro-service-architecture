@@ -1,0 +1,3 @@
+"""Alembic migrations."""
+
+CURRENT_MIGRATION_REVISION = "202606170001"

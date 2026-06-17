@@ -43,6 +43,9 @@ ignore = ["S101"]
 "services/match-orchestrator-service/tests/conftest.py" = ["E402"]
 "services/match-orchestrator-service/tests/**" = ["S105", "S106"]
 "services/match-orchestrator-service/scripts/**" = ["S104"]
+"services/sandbox-service/tests/conftest.py" = ["E402"]
+"services/sandbox-service/tests/**" = ["S105", "S106"]
+"services/sandbox-service/scripts/**" = ["S104"]
 
 [tool.mypy]
 python_version = "3.13"
