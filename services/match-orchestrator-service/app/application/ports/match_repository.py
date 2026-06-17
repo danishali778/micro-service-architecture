@@ -1,17 +1,24 @@
 from typing import Protocol
 
-from app.domain.entities.match import MatchOperationResult, MatchRecord, ScenarioSnapshot
+from app.domain.entities.match import (
+    MatchOperationResult,
+    MatchRecord,
+    SandboxProvision,
+    ScenarioSnapshot,
+)
 
 
 class MatchRepository(Protocol):
     def create_match(
         self,
         *,
+        match_id: str,
         tenant_id: str,
         subject_id: str,
         idempotency_key: str,
         request_hash: str,
         scenario: ScenarioSnapshot,
+        sandbox: SandboxProvision,
         retention_hours: int,
     ) -> MatchOperationResult: ...
 

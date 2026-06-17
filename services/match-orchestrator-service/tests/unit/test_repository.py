@@ -1,3 +1,4 @@
+from app.domain.entities.match import SandboxProvision
 from app.infrastructure.database.connection import create_session_factory
 from app.infrastructure.database.models import Base, MatchTransitionModel, OutboxRecordModel
 from app.infrastructure.database.repositories import SqlAlchemyMatchRepository
@@ -18,11 +19,18 @@ def test_repository_records_transitions_and_outbox() -> None:
 
     try:
         created = repository.create_match(
+            match_id="match_repo_1",
             tenant_id="tenant-1",
             subject_id="subject-1",
             idempotency_key="create-1",
             request_hash="hash-1",
             scenario=sample_snapshot(),
+            sandbox=SandboxProvision(
+                id="sandbox_123",
+                state="ready",
+                provider="local_fake",
+                allocation={"allocation_id": "local_sandbox_123"},
+            ),
             retention_hours=24,
         )
         cancelled = repository.cancel_match(
@@ -41,10 +49,12 @@ def test_repository_records_transitions_and_outbox() -> None:
     finally:
         engine.dispose()
 
-    assert created.match.state == "waiting_for_sandbox"
+    assert created.match.state == "sandbox_ready"
+    assert created.match.sandbox_id == "sandbox_123"
     assert cancelled.match.state == "cancelled"
     assert [transition.to_state for transition in transitions] == [
         "waiting_for_sandbox",
+        "sandbox_ready",
         "cancelling",
         "cancelled",
     ]

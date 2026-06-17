@@ -10,11 +10,13 @@ from app.api.routes import health, matches
 from app.application.commands.cancel_match import CancelMatch
 from app.application.commands.create_match import CreateMatch
 from app.application.ports.match_repository import MatchRepository
+from app.application.ports.sandbox_client import SandboxClient
 from app.application.ports.scenario_client import ScenarioClient
 from app.application.queries.get_match import GetMatch
 from app.core.config import Settings, get_settings
 from app.core.container import Services
 from app.core.logging import configure_logging
+from app.infrastructure.clients.sandbox_http_client import SandboxHttpClient
 from app.infrastructure.clients.scenario_http_client import ScenarioHttpClient
 from app.infrastructure.database.connection import create_database_engine, create_session_factory
 from app.infrastructure.database.health import DatabaseReadinessChecker, ReadinessChecker
@@ -27,6 +29,7 @@ def create_app(
     settings: Settings | None = None,
     match_repository: MatchRepository | None = None,
     scenario_client: ScenarioClient | None = None,
+    sandbox_client: SandboxClient | None = None,
     readiness_checker: ReadinessChecker | None = None,
     internal_auth_validator: InternalAuthValidator | None = None,
 ) -> FastAPI:
@@ -42,6 +45,7 @@ def create_app(
         )
         resolved_repository = match_repository
         resolved_scenario_client = scenario_client
+        resolved_sandbox_client = sandbox_client
         resolved_readiness_checker = readiness_checker
 
         if resolved_repository is None:
@@ -54,7 +58,7 @@ def create_app(
                 internal_auth_validator=resolved_auth_validator,
             )
 
-        if resolved_scenario_client is None:
+        if resolved_scenario_client is None or resolved_sandbox_client is None:
             timeout = httpx.Timeout(
                 connect=resolved_settings.downstream_connect_timeout_ms / 1000,
                 read=resolved_settings.downstream_request_timeout_ms / 1000,
@@ -62,9 +66,17 @@ def create_app(
                 pool=resolved_settings.downstream_connect_timeout_ms / 1000,
             )
             http_client = httpx.AsyncClient(timeout=timeout, follow_redirects=False)
+        if resolved_scenario_client is None:
+            assert http_client is not None
             resolved_scenario_client = ScenarioHttpClient(
                 http_client=http_client,
                 base_url=str(resolved_settings.scenario_service_url),
+            )
+        if resolved_sandbox_client is None:
+            assert http_client is not None
+            resolved_sandbox_client = SandboxHttpClient(
+                http_client=http_client,
+                base_url=str(resolved_settings.sandbox_service_url),
             )
 
         if resolved_readiness_checker is None:
@@ -78,11 +90,13 @@ def create_app(
             create_match=CreateMatch(
                 repository=resolved_repository,
                 scenario_client=resolved_scenario_client,
+                sandbox_client=resolved_sandbox_client,
                 settings=resolved_settings,
             ),
             get_match=GetMatch(resolved_repository),
             cancel_match=CancelMatch(
                 repository=resolved_repository,
+                sandbox_client=resolved_sandbox_client,
                 settings=resolved_settings,
             ),
             readiness_checker=resolved_readiness_checker,

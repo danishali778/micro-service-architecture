@@ -84,10 +84,12 @@ def get_match(
         404: {"model": ErrorResponse},
         409: {"model": ErrorResponse},
         422: {"model": ErrorResponse},
+        502: {"model": ErrorResponse},
         503: {"model": ErrorResponse},
+        504: {"model": ErrorResponse},
     },
 )
-def cancel_match(
+async def cancel_match(
     match_id: str,
     body: CancelMatchRequest,
     response: Response,
@@ -98,7 +100,7 @@ def cancel_match(
         Header(alias="Idempotency-Key", min_length=1, max_length=128),
     ],
 ) -> MatchResponse:
-    result = services.cancel_match.execute(
+    result = await services.cancel_match.execute(
         match_id=match_id,
         reason=body.reason,
         idempotency_key=idempotency_key,

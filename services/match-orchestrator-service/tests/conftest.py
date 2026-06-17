@@ -11,7 +11,7 @@ SERVICE_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SERVICE_ROOT))
 
 from app.core.config import Settings
-from app.domain.entities.match import ScenarioSnapshot
+from app.domain.entities.match import SandboxProvision, ScenarioSnapshot
 from app.infrastructure.database.connection import create_session_factory
 from app.infrastructure.database.health import StaticReadinessChecker
 from app.infrastructure.database.models import Base
@@ -89,13 +89,68 @@ class FakeScenarioClient:
         return sample_snapshot(scenario_id)
 
 
+@dataclass
+class FakeSandboxClient:
+    error: Exception | None = None
+    provision_calls: list[tuple[str, ScenarioSnapshot, str, TrustedInternalContext]] = field(
+        default_factory=list
+    )
+    terminate_calls: list[tuple[str, str, str, TrustedInternalContext]] = field(
+        default_factory=list
+    )
+
+    async def provision_sandbox(
+        self,
+        *,
+        match_id: str,
+        scenario: ScenarioSnapshot,
+        idempotency_key: str,
+        context: TrustedInternalContext,
+    ) -> SandboxProvision:
+        self.provision_calls.append((match_id, scenario, idempotency_key, context))
+        if self.error is not None:
+            raise self.error
+        return SandboxProvision(
+            id="sandbox_123",
+            state="ready",
+            provider="local_fake",
+            allocation={"allocation_id": "local_sandbox_123"},
+        )
+
+    async def terminate_sandbox(
+        self,
+        *,
+        sandbox_id: str,
+        reason: str,
+        idempotency_key: str,
+        context: TrustedInternalContext,
+    ) -> SandboxProvision:
+        self.terminate_calls.append((sandbox_id, reason, idempotency_key, context))
+        if self.error is not None:
+            raise self.error
+        return SandboxProvision(
+            id=sandbox_id,
+            state="terminated",
+            provider="local_fake",
+            allocation={"allocation_id": f"local_{sandbox_id}"},
+        )
+
+
 @pytest.fixture
 def scenario_client() -> FakeScenarioClient:
     return FakeScenarioClient()
 
 
 @pytest.fixture
-def client(scenario_client: FakeScenarioClient) -> Iterator[TestClient]:
+def sandbox_client() -> FakeSandboxClient:
+    return FakeSandboxClient()
+
+
+@pytest.fixture
+def client(
+    scenario_client: FakeScenarioClient,
+    sandbox_client: FakeSandboxClient,
+) -> Iterator[TestClient]:
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -107,6 +162,7 @@ def client(scenario_client: FakeScenarioClient) -> Iterator[TestClient]:
         settings=make_test_settings(),
         match_repository=repository,
         scenario_client=scenario_client,
+        sandbox_client=sandbox_client,
         readiness_checker=StaticReadinessChecker(),
     )
     with TestClient(app) as test_client:

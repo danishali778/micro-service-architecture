@@ -5,7 +5,12 @@ from uuid import uuid4
 from sqlalchemy import select
 
 from app.core.exceptions import ConflictError, NotFoundError
-from app.domain.entities.match import MatchOperationResult, MatchRecord, ScenarioSnapshot
+from app.domain.entities.match import (
+    MatchOperationResult,
+    MatchRecord,
+    SandboxProvision,
+    ScenarioSnapshot,
+)
 from app.domain.policies.match_lifecycle_policy import TERMINAL_STATES, ensure_cancellable
 from app.infrastructure.database.connection import SessionFactory
 from app.infrastructure.database.models import (
@@ -24,11 +29,13 @@ class SqlAlchemyMatchRepository:
     def create_match(
         self,
         *,
+        match_id: str,
         tenant_id: str,
         subject_id: str,
         idempotency_key: str,
         request_hash: str,
         scenario: ScenarioSnapshot,
+        sandbox: SandboxProvision,
         retention_hours: int,
     ) -> MatchOperationResult:
         route = "POST /internal/v1/matches"
@@ -51,7 +58,6 @@ class SqlAlchemyMatchRepository:
                 )
 
             now = datetime.now(UTC)
-            match_id = _new_id("match")
             match = MatchModel(
                 match_id=match_id,
                 tenant_id=tenant_id,
@@ -60,10 +66,14 @@ class SqlAlchemyMatchRepository:
                 scenario_version=scenario.version,
                 scenario_snapshot_id=scenario.snapshot_id,
                 scenario_snapshot=scenario.to_json(),
-                state="waiting_for_sandbox",
+                sandbox_id=sandbox.id,
+                sandbox_state=sandbox.state,
+                sandbox_provider=sandbox.provider,
+                sandbox_allocation=sandbox.allocation,
+                state="sandbox_ready",
                 phase="setup",
-                status_reason="scenario_snapshot_created",
-                aggregate_version=1,
+                status_reason="sandbox_ready",
+                aggregate_version=2,
                 created_at=now,
                 updated_at=now,
             )
@@ -90,6 +100,23 @@ class SqlAlchemyMatchRepository:
                     actor_type="subject",
                     actor_id=subject_id,
                     reason="scenario_snapshot_created",
+                    created_at=now,
+                )
+            )
+            session.add(
+                MatchTransitionModel(
+                    transition_id=_new_id("mtrans"),
+                    match_id=match_id,
+                    from_state="waiting_for_sandbox",
+                    to_state="sandbox_ready",
+                    from_phase="setup",
+                    to_phase="setup",
+                    aggregate_version=2,
+                    caused_by_type="sandbox",
+                    caused_by_id=sandbox.id,
+                    actor_type="workload",
+                    actor_id="sandbox-service",
+                    reason="sandbox_ready",
                     created_at=now,
                 )
             )
@@ -358,6 +385,10 @@ def _to_match_record(match: MatchModel) -> MatchRecord:
         cancelled_at=match.cancelled_at,
         completed_at=match.completed_at,
         failed_at=match.failed_at,
+        sandbox_id=match.sandbox_id,
+        sandbox_state=match.sandbox_state,
+        sandbox_provider=match.sandbox_provider,
+        sandbox_allocation=_dict_or_none(match.sandbox_allocation),
     )
 
 
@@ -379,6 +410,12 @@ def _dict_or_empty(value: object) -> dict[str, Any]:
     if isinstance(value, dict):
         return dict(value)
     return {}
+
+
+def _dict_or_none(value: object) -> dict[str, Any] | None:
+    if isinstance(value, dict):
+        return dict(value)
+    return None
 
 
 def _new_id(prefix: str) -> str:
