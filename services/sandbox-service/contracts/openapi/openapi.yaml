@@ -1,0 +1,319 @@
+openapi: 3.1.0
+info:
+  title: Cyber Range Sandbox Service
+  version: 0.1.0
+  description: Implemented milestone-one internal sandbox lifecycle contract.
+servers:
+  - url: /
+paths:
+  /health/live:
+    get:
+      operationId: getLiveness
+      security: []
+      responses:
+        "200":
+          description: Process is live
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+  /health/ready:
+    get:
+      operationId: getReadiness
+      security: []
+      responses:
+        "200":
+          description: Process is ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /internal/v1/sandboxes:
+    post:
+      operationId: provisionSandbox
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProvisionSandboxRequest"
+      responses:
+        "201":
+          description: Sandbox provisioned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sandbox"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+  /internal/v1/sandboxes/{sandbox_id}:
+    get:
+      operationId: getSandbox
+      parameters:
+        - $ref: "#/components/parameters/SandboxId"
+      responses:
+        "200":
+          description: Sandbox state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sandbox"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /internal/v1/sandboxes/{sandbox_id}/terminate:
+    post:
+      operationId: terminateSandbox
+      parameters:
+        - $ref: "#/components/parameters/SandboxId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TerminateSandboxRequest"
+      responses:
+        "200":
+          description: Sandbox terminated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sandbox"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+components:
+  parameters:
+    SandboxId:
+      name: sandbox_id
+      in: path
+      required: true
+      schema:
+        type: string
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+  responses:
+    Unauthorized:
+      description: Missing or invalid internal authentication
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Caller lacks permission
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource was not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: Request conflicts with current state
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ValidationError:
+      description: Request fields are invalid
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ServiceUnavailable:
+      description: Required dependency is unavailable
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    GatewayTimeout:
+      description: Provider timed out
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  schemas:
+    Health:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+    SandboxScenario:
+      type: object
+      additionalProperties: false
+      required: [snapshot_id, scenario_id, version, title]
+      properties:
+        snapshot_id:
+          type: string
+        scenario_id:
+          type: string
+        version:
+          type: string
+        title:
+          type: string
+    ProvisionSandboxRequest:
+      type: object
+      additionalProperties: false
+      required: [match_id, scenario, runtime_template, action_policy, resource_budget]
+      properties:
+        match_id:
+          type: string
+        scenario:
+          $ref: "#/components/schemas/SandboxScenario"
+        runtime_template:
+          type: object
+        action_policy:
+          type: object
+        resource_budget:
+          type: object
+        lease_duration_seconds:
+          type: [integer, "null"]
+          minimum: 1
+    TerminateSandboxRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          default: match_cancelled
+    Cleanup:
+      type: object
+      additionalProperties: false
+      required: [status, details]
+      properties:
+        status:
+          type: string
+        details:
+          type: array
+          items:
+            $ref: "#/components/schemas/ErrorDetail"
+    Sandbox:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - tenant_id
+        - subject_id
+        - match_id
+        - scenario
+        - state
+        - status_reason
+        - provider
+        - allocation
+        - lease_expires_at
+        - created_at
+        - updated_at
+        - ready_at
+        - terminated_at
+        - failed_at
+        - cleanup
+      properties:
+        id:
+          type: string
+        tenant_id:
+          type: string
+        subject_id:
+          type: string
+        match_id:
+          type: string
+        scenario:
+          $ref: "#/components/schemas/SandboxScenario"
+        state:
+          type: string
+        status_reason:
+          type: string
+        provider:
+          type: string
+        allocation:
+          type: object
+        lease_expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        ready_at:
+          type: [string, "null"]
+          format: date-time
+        terminated_at:
+          type: [string, "null"]
+          format: date-time
+        failed_at:
+          type: [string, "null"]
+          format: date-time
+        cleanup:
+          anyOf:
+            - $ref: "#/components/schemas/Cleanup"
+            - type: "null"
+    ErrorDetail:
+      type: object
+      additionalProperties: true
+    Error:
+      type: object
+      additionalProperties: false
+      required: [code, message, correlation_id, details]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        correlation_id:
+          type: string
+        details:
+          type: array
+          items:
+            $ref: "#/components/schemas/ErrorDetail"
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          $ref: "#/components/schemas/Error"
+

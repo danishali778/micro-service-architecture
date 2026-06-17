@@ -61,6 +61,10 @@ class Settings(BaseSettings):
         default_factory=lambda: AnyHttpUrl("http://127.0.0.1:9100"),
         validation_alias="SCENARIO_SERVICE_URL",
     )
+    sandbox_service_url: AnyHttpUrl = Field(
+        default_factory=lambda: AnyHttpUrl("http://127.0.0.1:9103"),
+        validation_alias="SANDBOX_SERVICE_URL",
+    )
     downstream_connect_timeout_ms: int = Field(
         default=500,
         ge=50,

@@ -1,4 +1,5 @@
-from conftest import FakeScenarioClient, auth_headers, idempotency_headers
+from app.core.exceptions import BadGatewayError, GatewayTimeoutError, ServiceUnavailableError
+from conftest import FakeSandboxClient, FakeScenarioClient, auth_headers, idempotency_headers
 from fastapi.testclient import TestClient
 
 
@@ -10,6 +11,7 @@ def test_liveness_and_readiness(client: TestClient) -> None:
 def test_create_read_and_cancel_match(
     client: TestClient,
     scenario_client: FakeScenarioClient,
+    sandbox_client: FakeSandboxClient,
 ) -> None:
     create_response = client.post(
         "/internal/v1/matches",
@@ -19,11 +21,14 @@ def test_create_read_and_cancel_match(
 
     assert create_response.status_code == 201
     created = create_response.json()
-    assert created["state"] == "waiting_for_sandbox"
+    assert created["state"] == "sandbox_ready"
     assert created["phase"] == "setup"
+    assert created["status_reason"] == "sandbox_ready"
     assert created["scenario"]["snapshot_id"] == "ssnap_sql_login_1_0_0"
     assert scenario_client.calls[0][0:2] == ("scn_sql_injection_login", "1.0.0")
     assert scenario_client.calls[0][2].tenant_id == "tenant-1"
+    assert sandbox_client.provision_calls[0][0] == created["id"]
+    assert sandbox_client.provision_calls[0][2] == "create-1"
 
     get_response = client.get(
         f"/internal/v1/matches/{created['id']}",
@@ -40,6 +45,8 @@ def test_create_read_and_cancel_match(
     assert cancel_response.status_code == 200
     assert cancel_response.json()["state"] == "cancelled"
     assert cancel_response.json()["cancelled_at"] is not None
+    assert sandbox_client.terminate_calls[0][0] == "sandbox_123"
+    assert sandbox_client.terminate_calls[0][2] == "cancel-1"
 
 
 def test_create_match_is_idempotent(client: TestClient) -> None:
@@ -92,3 +99,57 @@ def test_cross_tenant_match_read_is_hidden(client: TestClient) -> None:
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "match_not_found"
+
+
+def test_create_match_maps_sandbox_failures(
+    client: TestClient,
+    sandbox_client: FakeSandboxClient,
+) -> None:
+    sandbox_client.error = BadGatewayError()
+    malformed = client.post(
+        "/internal/v1/matches",
+        json={"scenario_id": "scn_sql_injection_login"},
+        headers={**auth_headers(), **idempotency_headers("sandbox-bad")},
+    )
+    assert malformed.status_code == 502
+
+    sandbox_client.error = ServiceUnavailableError()
+    unavailable = client.post(
+        "/internal/v1/matches",
+        json={"scenario_id": "scn_sql_injection_login"},
+        headers={**auth_headers(), **idempotency_headers("sandbox-unavailable")},
+    )
+    assert unavailable.status_code == 503
+
+    sandbox_client.error = GatewayTimeoutError()
+    timeout = client.post(
+        "/internal/v1/matches",
+        json={"scenario_id": "scn_sql_injection_login"},
+        headers={**auth_headers(), **idempotency_headers("sandbox-timeout")},
+    )
+    assert timeout.status_code == 504
+
+
+def test_cancel_does_not_mark_match_cancelled_when_sandbox_termination_fails(
+    client: TestClient,
+    sandbox_client: FakeSandboxClient,
+) -> None:
+    created = client.post(
+        "/internal/v1/matches",
+        json={"scenario_id": "scn_sql_injection_login"},
+        headers={**auth_headers(), **idempotency_headers("create-before-failed-cancel")},
+    ).json()
+    sandbox_client.error = ServiceUnavailableError()
+
+    failed_cancel = client.post(
+        f"/internal/v1/matches/{created['id']}/cancel",
+        json={"reason": "user_requested"},
+        headers={**auth_headers(scopes="matches:cancel"), **idempotency_headers("failed-cancel")},
+    )
+    current = client.get(
+        f"/internal/v1/matches/{created['id']}",
+        headers=auth_headers(scopes="matches:read"),
+    )
+
+    assert failed_cancel.status_code == 503
+    assert current.json()["state"] == "sandbox_ready"

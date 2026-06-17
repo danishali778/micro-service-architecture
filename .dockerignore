@@ -1,0 +1,13 @@
+.git
+.venv
+.uv-cache
+.pytest_cache
+**/.pytest_cache
+**/__pycache__
+**/*.pyc
+**/.coverage
+.ruff_cache
+.mypy_cache
+docs
+README.md
+

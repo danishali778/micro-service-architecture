@@ -1,0 +1,66 @@
+name: Sandbox Service CI
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/sandbox-service-ci.yml"
+      - ".python-version"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "services/sandbox-service/**"
+      - "services/match-orchestrator-service/**"
+      - "docs/services/sandbox-service/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/sandbox-service-ci.yml"
+      - ".python-version"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "services/sandbox-service/**"
+      - "services/match-orchestrator-service/**"
+      - "docs/services/sandbox-service/**"
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: sandbox
+          POSTGRES_PASSWORD: sandbox
+          POSTGRES_DB: sandbox_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_TEST_URL: postgresql+psycopg://sandbox:sandbox@127.0.0.1:5432/sandbox_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.16"
+          enable-cache: true
+      - run: uv python install 3.13
+      - run: uv sync --all-packages --group dev --locked
+      - run: uv run ruff format --check services/sandbox-service
+      - run: uv run ruff check services/sandbox-service
+      - run: uv run mypy --config-file services/sandbox-service/pyproject.toml services/sandbox-service/app services/sandbox-service/scripts
+        env:
+          MYPYPATH: services/sandbox-service
+      - run: uv run pytest
+        working-directory: services/sandbox-service
+        env:
+          DATABASE_TEST_URL: postgresql+psycopg://sandbox:sandbox@127.0.0.1:5432/sandbox_test
+          PYTHONPATH: .
+      - run: uv run python services/sandbox-service/scripts/validate_openapi.py
+      - run: docker build -f services/sandbox-service/Dockerfile .
+

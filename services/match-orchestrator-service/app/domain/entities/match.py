@@ -43,6 +43,18 @@ class MatchRecord:
     cancelled_at: datetime | None
     completed_at: datetime | None
     failed_at: datetime | None
+    sandbox_id: str | None
+    sandbox_state: str | None
+    sandbox_provider: str | None
+    sandbox_allocation: dict[str, Any] | None
+
+
+@dataclass(frozen=True, slots=True)
+class SandboxProvision:
+    id: str
+    state: str
+    provider: str
+    allocation: dict[str, Any]
 
 
 @dataclass(frozen=True, slots=True)

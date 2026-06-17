@@ -230,7 +230,7 @@ def test_create_match_forwards_to_orchestrator(
     )
 
     assert response.status_code == 200
-    assert response.json()["state"] == "waiting_for_sandbox"
+    assert response.json()["state"] == "sandbox_ready"
     assert response.json()["scenario"]["snapshot_id"] == "ssnap_sql_login_1_0_0"
     scenario_id, version, idempotency_key, context = match_client.create_calls[0]
     assert (scenario_id, version, idempotency_key) == (
