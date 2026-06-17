@@ -215,7 +215,7 @@ def _match(
     *,
     match_id: str = "match_123",
     scenario_id: str = "scn_sql_injection_login",
-    state: str = "waiting_for_sandbox",
+    state: str = "sandbox_ready",
     status_reason: str = "scenario_snapshot_created",
 ) -> Match:
     now = datetime(2026, 6, 16, 11, 0, tzinfo=UTC)

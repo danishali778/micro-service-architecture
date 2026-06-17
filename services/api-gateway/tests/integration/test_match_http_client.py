@@ -32,7 +32,7 @@ def _match_payload() -> dict[str, object]:
             "snapshot_id": "ssnap_sql_login_1_0_0",
             "title": "SQL Injection Login Bypass",
         },
-        "state": "waiting_for_sandbox",
+        "state": "sandbox_ready",
         "phase": "setup",
         "status_reason": "scenario_snapshot_created",
         "created_at": "2026-06-16T11:00:00+00:00",
