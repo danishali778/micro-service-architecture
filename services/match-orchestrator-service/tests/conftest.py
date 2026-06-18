@@ -11,7 +11,12 @@ SERVICE_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SERVICE_ROOT))
 
 from app.core.config import Settings
-from app.domain.entities.match import SandboxProvision, ScenarioSnapshot
+from app.domain.entities.match import (
+    RedRunProposal,
+    RedRunResult,
+    SandboxProvision,
+    ScenarioSnapshot,
+)
 from app.infrastructure.database.connection import create_session_factory
 from app.infrastructure.database.health import StaticReadinessChecker
 from app.infrastructure.database.models import Base
@@ -29,6 +34,7 @@ def make_test_settings(**overrides: object) -> Settings:
         "database_url": "postgresql+psycopg://match:match@127.0.0.1:5432/match",
         "internal_auth_mode": "local_header",
         "scenario_service_url": "https://scenario.test",
+        "red_agent_service_url": "https://red-agent.test",
         "require_current_migration": False,
     }
     values.update(overrides)
@@ -136,6 +142,44 @@ class FakeSandboxClient:
         )
 
 
+@dataclass
+class FakeRedAgentClient:
+    error: Exception | None = None
+    start_calls: list[
+        tuple[str, ScenarioSnapshot, SandboxProvision, str, TrustedInternalContext]
+    ] = field(default_factory=list)
+
+    async def start_red_run(
+        self,
+        *,
+        match_id: str,
+        scenario: ScenarioSnapshot,
+        sandbox: SandboxProvision,
+        idempotency_key: str,
+        context: TrustedInternalContext,
+    ) -> RedRunResult:
+        self.start_calls.append((match_id, scenario, sandbox, idempotency_key, context))
+        if self.error is not None:
+            raise self.error
+        return RedRunResult(
+            id="redrun_123",
+            state="proposal_ready",
+            adapter="local_fake",
+            profile_ref="red-agent-local-fake@1",
+            proposal=RedRunProposal(
+                id="attackprop_123",
+                proposal_type="http_request",
+                title="Probe login form for SQL injection",
+                summary="Submit a controlled authentication bypass payload.",
+                rationale="The scenario target is a login bypass training target.",
+                action={"kind": "http_request", "method": "POST", "path": "/login"},
+                expected_signal="Authenticated response.",
+                risk_level="training_safe",
+                confidence=0.75,
+            ),
+        )
+
+
 @pytest.fixture
 def scenario_client() -> FakeScenarioClient:
     return FakeScenarioClient()
@@ -147,9 +191,15 @@ def sandbox_client() -> FakeSandboxClient:
 
 
 @pytest.fixture
+def red_agent_client() -> FakeRedAgentClient:
+    return FakeRedAgentClient()
+
+
+@pytest.fixture
 def client(
     scenario_client: FakeScenarioClient,
     sandbox_client: FakeSandboxClient,
+    red_agent_client: FakeRedAgentClient,
 ) -> Iterator[TestClient]:
     engine = create_engine(
         "sqlite://",
@@ -163,6 +213,7 @@ def client(
         match_repository=repository,
         scenario_client=scenario_client,
         sandbox_client=sandbox_client,
+        red_agent_client=red_agent_client,
         readiness_checker=StaticReadinessChecker(),
     )
     with TestClient(app) as test_client:

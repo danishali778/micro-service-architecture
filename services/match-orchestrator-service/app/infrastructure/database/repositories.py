@@ -8,6 +8,7 @@ from app.core.exceptions import ConflictError, NotFoundError
 from app.domain.entities.match import (
     MatchOperationResult,
     MatchRecord,
+    RedRunResult,
     SandboxProvision,
     ScenarioSnapshot,
 )
@@ -26,7 +27,7 @@ class SqlAlchemyMatchRepository:
     def __init__(self, session_factory: SessionFactory) -> None:
         self._session_factory = session_factory
 
-    def create_match(
+    def ensure_sandbox_ready_match(
         self,
         *,
         match_id: str,
@@ -36,7 +37,6 @@ class SqlAlchemyMatchRepository:
         request_hash: str,
         scenario: ScenarioSnapshot,
         sandbox: SandboxProvision,
-        retention_hours: int,
     ) -> MatchOperationResult:
         route = "POST /internal/v1/matches"
         with self._session_factory() as session:
@@ -57,11 +57,24 @@ class SqlAlchemyMatchRepository:
                     status_code=existing.response_status,
                 )
 
+            match = session.scalar(
+                select(MatchModel).where(
+                    MatchModel.match_id == match_id,
+                    MatchModel.tenant_id == tenant_id,
+                    MatchModel.subject_id == subject_id,
+                )
+            )
+            if match is not None:
+                if match.creation_request_hash not in {None, request_hash}:
+                    raise ConflictError("Idempotency key was already used for a different request.")
+                return MatchOperationResult(match=_to_match_record(match), status_code=202)
+
             now = datetime.now(UTC)
             match = MatchModel(
                 match_id=match_id,
                 tenant_id=tenant_id,
                 subject_id=subject_id,
+                creation_request_hash=request_hash,
                 scenario_id=scenario.scenario_id,
                 scenario_version=scenario.version,
                 scenario_snapshot_id=scenario.snapshot_id,
@@ -126,6 +139,93 @@ class SqlAlchemyMatchRepository:
                 match=match,
                 now=now,
             )
+            session.commit()
+            return MatchOperationResult(match=_to_match_record(match), status_code=202)
+
+    def mark_red_proposal_ready(
+        self,
+        *,
+        tenant_id: str,
+        subject_id: str,
+        match_id: str,
+        idempotency_key: str,
+        request_hash: str,
+        red_run: RedRunResult,
+        retention_hours: int,
+    ) -> MatchOperationResult:
+        route = "POST /internal/v1/matches"
+        with self._session_factory() as session:
+            existing = _find_idempotency_record(
+                session=session,
+                tenant_id=tenant_id,
+                subject_id=subject_id,
+                route=route,
+                idempotency_key=idempotency_key,
+            )
+            if existing is not None:
+                _ensure_same_request(existing, request_hash)
+                match = session.get(MatchModel, existing.resource_id)
+                if match is None:
+                    raise ConflictError("The original idempotent resource is unavailable.")
+                return MatchOperationResult(
+                    match=_to_match_record(match),
+                    status_code=existing.response_status,
+                )
+
+            match = session.scalar(
+                select(MatchModel).where(
+                    MatchModel.match_id == match_id,
+                    MatchModel.tenant_id == tenant_id,
+                    MatchModel.subject_id == subject_id,
+                )
+            )
+            if match is None:
+                raise NotFoundError(
+                    code="match_not_found",
+                    message="The requested match was not found.",
+                )
+            if match.creation_request_hash not in {None, request_hash}:
+                raise ConflictError("Idempotency key was already used for a different request.")
+
+            now = datetime.now(UTC)
+            if match.state != "red_proposal_ready":
+                previous_state = match.state
+                previous_phase = match.phase
+                match.red_run_id = red_run.id
+                match.red_run_state = red_run.state
+                match.red_agent_adapter = red_run.adapter
+                match.red_agent_profile_ref = red_run.profile_ref
+                match.attack_proposal_id = red_run.proposal.id
+                match.attack_proposal = red_run.proposal.to_json()
+                match.state = "red_proposal_ready"
+                match.phase = "attack"
+                match.status_reason = "red_proposal_ready"
+                match.aggregate_version += 1
+                match.updated_at = now
+                session.add(
+                    MatchTransitionModel(
+                        transition_id=_new_id("mtrans"),
+                        match_id=match.match_id,
+                        from_state=previous_state,
+                        to_state="red_proposal_ready",
+                        from_phase=previous_phase,
+                        to_phase="attack",
+                        aggregate_version=match.aggregate_version,
+                        caused_by_type="red_agent",
+                        caused_by_id=red_run.id,
+                        actor_type="workload",
+                        actor_id="red-agent-service",
+                        reason="red_proposal_ready",
+                        created_at=now,
+                    )
+                )
+                _add_outbox(
+                    session=session,
+                    message_type="match.red_proposal_ready",
+                    match=match,
+                    now=now,
+                )
+
             session.add(
                 _idempotency_record(
                     tenant_id=tenant_id,
@@ -389,6 +489,12 @@ def _to_match_record(match: MatchModel) -> MatchRecord:
         sandbox_state=match.sandbox_state,
         sandbox_provider=match.sandbox_provider,
         sandbox_allocation=_dict_or_none(match.sandbox_allocation),
+        red_run_id=match.red_run_id,
+        red_run_state=match.red_run_state,
+        red_agent_adapter=match.red_agent_adapter,
+        red_agent_profile_ref=match.red_agent_profile_ref,
+        attack_proposal_id=match.attack_proposal_id,
+        attack_proposal=_dict_or_none(match.attack_proposal),
     )
 
 

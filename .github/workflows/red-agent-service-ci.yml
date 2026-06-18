@@ -1,0 +1,66 @@
+name: Red Agent Service CI
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/red-agent-service-ci.yml"
+      - ".python-version"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "services/red-agent-service/**"
+      - "services/match-orchestrator-service/**"
+      - "docs/services/red-agent-service/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/red-agent-service-ci.yml"
+      - ".python-version"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "services/red-agent-service/**"
+      - "services/match-orchestrator-service/**"
+      - "docs/services/red-agent-service/**"
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: red_agent
+          POSTGRES_PASSWORD: red_agent
+          POSTGRES_DB: red_agent_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_TEST_URL: postgresql+psycopg://red_agent:red_agent@127.0.0.1:5432/red_agent_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.16"
+          enable-cache: true
+      - run: uv python install 3.13
+      - run: uv sync --all-packages --group dev --locked
+      - run: uv run ruff format --check services/red-agent-service
+      - run: uv run ruff check services/red-agent-service
+      - run: uv run mypy --config-file services/red-agent-service/pyproject.toml services/red-agent-service/app services/red-agent-service/scripts
+        env:
+          MYPYPATH: services/red-agent-service
+      - run: uv run pytest
+        working-directory: services/red-agent-service
+        env:
+          DATABASE_TEST_URL: postgresql+psycopg://red_agent:red_agent@127.0.0.1:5432/red_agent_test
+          PYTHONPATH: .
+      - run: uv run python services/red-agent-service/scripts/validate_openapi.py
+      - run: docker build -f services/red-agent-service/Dockerfile .
+

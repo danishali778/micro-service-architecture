@@ -3,13 +3,14 @@ from typing import Protocol
 from app.domain.entities.match import (
     MatchOperationResult,
     MatchRecord,
+    RedRunResult,
     SandboxProvision,
     ScenarioSnapshot,
 )
 
 
 class MatchRepository(Protocol):
-    def create_match(
+    def ensure_sandbox_ready_match(
         self,
         *,
         match_id: str,
@@ -19,6 +20,17 @@ class MatchRepository(Protocol):
         request_hash: str,
         scenario: ScenarioSnapshot,
         sandbox: SandboxProvision,
+    ) -> MatchOperationResult: ...
+
+    def mark_red_proposal_ready(
+        self,
+        *,
+        tenant_id: str,
+        subject_id: str,
+        match_id: str,
+        idempotency_key: str,
+        request_hash: str,
+        red_run: RedRunResult,
         retention_hours: int,
     ) -> MatchOperationResult: ...
 
