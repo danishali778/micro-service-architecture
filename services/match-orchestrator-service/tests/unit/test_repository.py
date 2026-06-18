@@ -1,4 +1,4 @@
-from app.domain.entities.match import SandboxProvision
+from app.domain.entities.match import RedRunProposal, RedRunResult, SandboxProvision
 from app.infrastructure.database.connection import create_session_factory
 from app.infrastructure.database.models import Base, MatchTransitionModel, OutboxRecordModel
 from app.infrastructure.database.repositories import SqlAlchemyMatchRepository
@@ -18,7 +18,7 @@ def test_repository_records_transitions_and_outbox() -> None:
     repository = SqlAlchemyMatchRepository(factory)
 
     try:
-        created = repository.create_match(
+        created = repository.ensure_sandbox_ready_match(
             match_id="match_repo_1",
             tenant_id="tenant-1",
             subject_id="subject-1",
@@ -31,12 +31,36 @@ def test_repository_records_transitions_and_outbox() -> None:
                 provider="local_fake",
                 allocation={"allocation_id": "local_sandbox_123"},
             ),
+        )
+        finalized = repository.mark_red_proposal_ready(
+            tenant_id="tenant-1",
+            subject_id="subject-1",
+            match_id=created.match.id,
+            idempotency_key="create-1",
+            request_hash="hash-1",
+            red_run=RedRunResult(
+                id="redrun_123",
+                state="proposal_ready",
+                adapter="local_fake",
+                profile_ref="red-agent-local-fake@1",
+                proposal=RedRunProposal(
+                    id="attackprop_123",
+                    proposal_type="http_request",
+                    title="Probe login form",
+                    summary="Submit a controlled payload.",
+                    rationale="Training target.",
+                    action={"kind": "http_request", "method": "POST", "path": "/login"},
+                    expected_signal="Authenticated response.",
+                    risk_level="training_safe",
+                    confidence=0.75,
+                ),
+            ),
             retention_hours=24,
         )
         cancelled = repository.cancel_match(
             tenant_id="tenant-1",
             subject_id="subject-1",
-            match_id=created.match.id,
+            match_id=finalized.match.id,
             idempotency_key="cancel-1",
             request_hash="hash-2",
             reason="user_requested",
@@ -51,11 +75,19 @@ def test_repository_records_transitions_and_outbox() -> None:
 
     assert created.match.state == "sandbox_ready"
     assert created.match.sandbox_id == "sandbox_123"
+    assert finalized.match.state == "red_proposal_ready"
+    assert finalized.match.red_run_id == "redrun_123"
+    assert finalized.match.attack_proposal_id == "attackprop_123"
     assert cancelled.match.state == "cancelled"
     assert [transition.to_state for transition in transitions] == [
         "waiting_for_sandbox",
         "sandbox_ready",
+        "red_proposal_ready",
         "cancelling",
         "cancelled",
     ]
-    assert [record.message_type for record in outbox] == ["match.created", "match.cancelled"]
+    assert [record.message_type for record in outbox] == [
+        "match.created",
+        "match.red_proposal_ready",
+        "match.cancelled",
+    ]

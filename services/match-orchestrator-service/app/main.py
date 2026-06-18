@@ -10,12 +10,14 @@ from app.api.routes import health, matches
 from app.application.commands.cancel_match import CancelMatch
 from app.application.commands.create_match import CreateMatch
 from app.application.ports.match_repository import MatchRepository
+from app.application.ports.red_agent_client import RedAgentClient
 from app.application.ports.sandbox_client import SandboxClient
 from app.application.ports.scenario_client import ScenarioClient
 from app.application.queries.get_match import GetMatch
 from app.core.config import Settings, get_settings
 from app.core.container import Services
 from app.core.logging import configure_logging
+from app.infrastructure.clients.red_agent_http_client import RedAgentHttpClient
 from app.infrastructure.clients.sandbox_http_client import SandboxHttpClient
 from app.infrastructure.clients.scenario_http_client import ScenarioHttpClient
 from app.infrastructure.database.connection import create_database_engine, create_session_factory
@@ -30,6 +32,7 @@ def create_app(
     match_repository: MatchRepository | None = None,
     scenario_client: ScenarioClient | None = None,
     sandbox_client: SandboxClient | None = None,
+    red_agent_client: RedAgentClient | None = None,
     readiness_checker: ReadinessChecker | None = None,
     internal_auth_validator: InternalAuthValidator | None = None,
 ) -> FastAPI:
@@ -46,6 +49,7 @@ def create_app(
         resolved_repository = match_repository
         resolved_scenario_client = scenario_client
         resolved_sandbox_client = sandbox_client
+        resolved_red_agent_client = red_agent_client
         resolved_readiness_checker = readiness_checker
 
         if resolved_repository is None:
@@ -58,7 +62,11 @@ def create_app(
                 internal_auth_validator=resolved_auth_validator,
             )
 
-        if resolved_scenario_client is None or resolved_sandbox_client is None:
+        if (
+            resolved_scenario_client is None
+            or resolved_sandbox_client is None
+            or resolved_red_agent_client is None
+        ):
             timeout = httpx.Timeout(
                 connect=resolved_settings.downstream_connect_timeout_ms / 1000,
                 read=resolved_settings.downstream_request_timeout_ms / 1000,
@@ -78,6 +86,12 @@ def create_app(
                 http_client=http_client,
                 base_url=str(resolved_settings.sandbox_service_url),
             )
+        if resolved_red_agent_client is None:
+            assert http_client is not None
+            resolved_red_agent_client = RedAgentHttpClient(
+                http_client=http_client,
+                base_url=str(resolved_settings.red_agent_service_url),
+            )
 
         if resolved_readiness_checker is None:
             resolved_readiness_checker = DatabaseReadinessChecker(
@@ -91,6 +105,7 @@ def create_app(
                 repository=resolved_repository,
                 scenario_client=resolved_scenario_client,
                 sandbox_client=resolved_sandbox_client,
+                red_agent_client=resolved_red_agent_client,
                 settings=resolved_settings,
             ),
             get_match=GetMatch(resolved_repository),

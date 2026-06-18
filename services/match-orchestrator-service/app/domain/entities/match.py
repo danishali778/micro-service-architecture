@@ -47,6 +47,12 @@ class MatchRecord:
     sandbox_state: str | None
     sandbox_provider: str | None
     sandbox_allocation: dict[str, Any] | None
+    red_run_id: str | None
+    red_run_state: str | None
+    red_agent_adapter: str | None
+    red_agent_profile_ref: str | None
+    attack_proposal_id: str | None
+    attack_proposal: dict[str, Any] | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +61,41 @@ class SandboxProvision:
     state: str
     provider: str
     allocation: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class RedRunProposal:
+    id: str
+    proposal_type: str
+    title: str
+    summary: str
+    rationale: str
+    action: dict[str, Any]
+    expected_signal: str
+    risk_level: str
+    confidence: float
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "proposal_id": self.id,
+            "proposal_type": self.proposal_type,
+            "title": self.title,
+            "summary": self.summary,
+            "rationale": self.rationale,
+            "action": self.action,
+            "expected_signal": self.expected_signal,
+            "risk_level": self.risk_level,
+            "confidence": self.confidence,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RedRunResult:
+    id: str
+    state: str
+    adapter: str
+    profile_ref: str
+    proposal: RedRunProposal
 
 
 @dataclass(frozen=True, slots=True)

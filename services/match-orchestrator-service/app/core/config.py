@@ -65,6 +65,10 @@ class Settings(BaseSettings):
         default_factory=lambda: AnyHttpUrl("http://127.0.0.1:9103"),
         validation_alias="SANDBOX_SERVICE_URL",
     )
+    red_agent_service_url: AnyHttpUrl = Field(
+        default_factory=lambda: AnyHttpUrl("http://127.0.0.1:9104"),
+        validation_alias="RED_AGENT_SERVICE_URL",
+    )
     downstream_connect_timeout_ms: int = Field(
         default=500,
         ge=50,

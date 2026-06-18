@@ -1,7 +1,7 @@
 from app.core.exceptions import ConflictError
 
 ACTIVE_CANCELLABLE_STATES = frozenset(
-    {"created", "waiting_for_sandbox", "sandbox_ready", "cancelling"}
+    {"created", "waiting_for_sandbox", "sandbox_ready", "red_proposal_ready", "cancelling"}
 )
 TERMINAL_STATES = frozenset({"cancelled", "failed", "completed"})
 
